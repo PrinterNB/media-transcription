@@ -22,7 +22,7 @@ model before the naming stage, and only one ASR backend is ever resident.
 | Canary qwen-2.5b (bf16) | ~6 GB | transcribing (exclusive slot) |
 | Whisper large-v3 (fp16) | ~3.1 GB | transcribing (exclusive slot) |
 | pyannote speaker-diarization-3.1 | ~1 GB | diarizing (kept resident) |
-| Ollama `qwen-fast` (27B GGUF) | ~13.7 GB | naming — never overlaps ASR/diarize |
+| Ollama naming model (e.g. a 27B GGUF) | ~13.7 GB | naming — never overlaps ASR/diarize |
 
 ## Prerequisites
 
