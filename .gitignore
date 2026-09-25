@@ -1,0 +1,18 @@
+# python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# secrets / local config
+.env
+
+# runtime data (GBs of uploads) — consider excluding from OneDrive backup too
+data/
+
+# web
+web/node_modules/
+web/dist/
+
+# model caches / logs
+*.log
