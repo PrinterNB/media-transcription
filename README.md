@@ -30,9 +30,11 @@ model before the naming stage, and only one ASR backend is ever resident.
 - Node 20+ (web build)
 - ffmpeg on `PATH` (e.g. `winget install Gyan.FFmpeg`) — the server uses
   `ffmpeg`/`ffprobe` to strip and normalize audio
-- [Ollama](https://ollama.com) running on `localhost:11434` with a model
-  named **`qwen-fast`** (used for speaker naming; jobs still complete without
-  it — speakers just keep their `Speaker N` labels)
+- [Ollama](https://ollama.com) running on `localhost:11434` with at least one
+  model installed (used for speaker naming; jobs still complete without it —
+  speakers just keep their `Speaker N` labels). The upload form lists every
+  model Ollama has and lets you pick one per job; the default is the
+  `OLLAMA_MODEL` value in `.env` (currently `qwen-fast`).
 - A Hugging Face token with access to the gated
   [`pyannote/speaker-diarization-3.1`](https://huggingface.co/pyannote/speaker-diarization-3.1):
   accept the model's terms on that page, then create a token at
@@ -84,10 +86,13 @@ and launches uvicorn. When it's up it prints the addresses:
      for English (and accents); no other languages.
    - **Multilingual** — Whisper large-v3, with an optional language hint
      (leave empty to auto-detect).
-3. Toggles, both on by default:
+3. Toggles and options, all on by default:
    - **Diarize** — separate speakers with pyannote.
    - **Name speakers** — Ollama pass that assigns real names where a speaker
      says their name; everyone else stays `Speaker N`.
+   - **Ollama model** — which model does the naming pass (dropdown lists every
+     model on your Ollama server). Leave it on `(default)` to use `OLLAMA_MODEL`
+     from `.env`.
 4. Watch the job list — stages (extract → transcribe → diarize → name → write)
    and progress update live over SSE. Jobs can be cancelled between stages.
 5. When done: read the transcript in the UI (colored speaker chips, names with
