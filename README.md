@@ -26,19 +26,36 @@ model before the naming stage, and only one ASR backend is ever resident.
 
 ## Prerequisites
 
-- Python via [uv](https://docs.astral.sh/uv/) (uv manages a `.venv` with Python 3.12)
-- Node 20+ (web build)
-- ffmpeg on `PATH` (e.g. `winget install Gyan.FFmpeg`) — the server uses
-  `ffmpeg`/`ffprobe` to strip and normalize audio
-- [Ollama](https://ollama.com) running on `localhost:11434` with at least one
-  model installed (used for speaker naming; jobs still complete without it —
-  speakers just keep their `Speaker N` labels). The upload form lists every
-  model Ollama has and lets you pick one per job; the default is the
-  `OLLAMA_MODEL` value in `.env` (currently `qwen-fast`).
-- A Hugging Face token with access to the gated
-  [`pyannote/speaker-diarization-3.1`](https://huggingface.co/pyannote/speaker-diarization-3.1):
-  accept the model's terms on that page, then create a token at
-  <https://huggingface.co/settings/tokens>
+Install each of these (Windows PowerShell):
+
+1. **[uv](https://docs.astral.sh/uv/)** — manages the project `.venv` with
+   Python 3.12:
+
+   ```powershell
+   powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+   ```
+
+   (Alternative: `winget install astral-sh.uv`.) The installer puts `uv.exe`
+   in `C:\Users\<you>\.local\bin` and adds it to `PATH` — open a new terminal
+   afterwards.
+2. **Node 20+** (web build): `winget install OpenJS.NodeJS.LTS`. Check with
+   `node --version`.
+3. **ffmpeg** — the server uses `ffmpeg`/`ffprobe` to strip and normalize
+   audio. `winget install Gyan.FFmpeg` is the self-contained option; Chocolatey
+   (`choco install ffmpeg`) works too if you already use it. Either way
+   `ffmpeg.exe` must resolve on `PATH` (`ffmpeg -version`).
+4. **[Ollama](https://ollama.com)** (speaker naming) —
+   `winget install Ollama.Ollama` (or download from ollama.com); it runs on
+   `localhost:11434` by default. Pull at least one model, e.g.
+   `ollama pull qwen-fast` — any model you pull works: the upload form lists
+   every model Ollama has and lets you pick one per job, and the default is the
+   `OLLAMA_MODEL` value in `.env` (currently `qwen-fast`). If Ollama is offline,
+   jobs still complete — speakers just keep their `Speaker N` labels.
+5. **A Hugging Face token** with access to the gated
+   [`pyannote/speaker-diarization-3.1`](https://huggingface.co/pyannote/speaker-diarization-3.1):
+   accept the model's terms on that page, create a token at
+   <https://huggingface.co/settings/tokens>, and put it in `.env` as
+   `HF_TOKEN=hf_...`.
 
 ## Setup
 
