@@ -14,6 +14,7 @@ from __future__ import annotations
 import re
 import shutil
 import subprocess
+import threading
 from pathlib import Path
 from typing import Callable
 
@@ -128,22 +129,44 @@ def normalize(src: Path, dst: Path, progress_cb: ProgressCB | None = None) -> fl
         "-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le",
         str(dst),
     ]
-    # stream the progress
+    # Stream the progress. stderr MUST be drained concurrently in a thread:
+    # ffmpeg writes its banner (~6 KB on current builds) to stderr early, and
+    # if we only read it after proc.wait() the pipe fills and ffmpeg blocks
+    # on a write nobody is consuming — the job hangs at 0% CPU forever.
     proc = subprocess.Popen(
         cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
     )
-    assert proc.stdout is not None
+    assert proc.stdout is not None and proc.stderr is not None
+    stderr_chunks: list[str] = []
+
+    def _drain_stderr() -> None:
+        assert proc.stderr is not None
+        for line in proc.stderr:
+            stderr_chunks.append(line)
+
+    stderr_thread = threading.Thread(target=_drain_stderr, daemon=True)
+    stderr_thread.start()
     out_time_ms = 0.0
     for line in proc.stdout:
         m = re.search(r"out_time_ms=(\d+)", line)
         if m:
-            out_time_ms = int(m.group(1)) / 1000.0
+            raw = int(m.group(1))
+            # Named "ms", but current ffmpeg builds fill it with microseconds;
+            # the ffprobe duration lets us tell the two apart.
+            t = raw / 1_000.0
+            if duration > 0 and t > duration and raw >= duration:
+                t = raw / 1_000_000.0
+            out_time_ms = t
             if progress_cb and duration > 0:
                 progress_cb(min(1.0, out_time_ms / duration), f"extracting {out_time_ms:.0f}s")
+    proc.stdout.close()
+    stderr_thread.join()
     proc.wait()
     if proc.returncode != 0 or not dst.exists():
-        err = proc.stderr.read() if proc.stderr else ""
-        raise AudioError(f"ffmpeg failed (code {proc.returncode}): {err[:400]}")
+        # tail, not head: ffmpeg's banner is at the front, the actual error
+        # message is at the end of stderr.
+        err = "".join(stderr_chunks).strip()
+        raise AudioError(f"ffmpeg failed (code {proc.returncode}): {err[-500:]}")
 
     if progress_cb:
         progress_cb(1.0, "extract done")

@@ -46,10 +46,21 @@ class JobWorker:
 
     # ---- lifecycle ----
     def start(self) -> None:
+        self._resume_stale()
         if self._thread and self._thread.is_alive():
             return
         self._thread = threading.Thread(target=self._loop, name="job-worker", daemon=True)
         self._thread.start()
+
+    def _resume_stale(self) -> None:
+        """Re-queue jobs a previous process left non-terminal (crash/restart).
+
+        The queue is in-memory, so without this a job still marked `running`
+        in sqlite would sit there forever after the server is restarted.
+        """
+        for job in get_db().list():
+            if job["status"] not in TERMINAL:
+                self.q.put(job["id"])
 
     def _loop(self) -> None:
         while True:
