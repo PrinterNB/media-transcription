@@ -4,6 +4,7 @@ import JobList from './components/JobList'
 import type { FormState } from './components/JobForm'
 import TranscriptView from './components/TranscriptView'
 import DownloadBar from './components/DownloadBar'
+import SummaryPanel from './components/SummaryPanel'
 import UploadPanel from './components/UploadPanel'
 import type { Job } from './lib/types'
 
@@ -76,13 +77,14 @@ function DetailPane({
         </div>
       )}
 
+      {job.status === 'done' && <DownloadBar job={job} />}
+
+      <SummaryPanel job={job} />
+
       {job.status === 'done' && (
-        <>
-          <DownloadBar job={job} />
-          <div className="min-h-0 flex-1 overflow-y-auto py-2">
-            <TranscriptView job={job} />
-          </div>
-        </>
+        <div className="min-h-0 flex-1 overflow-y-auto py-2">
+          <TranscriptView job={job} />
+        </div>
       )}
     </div>
   )

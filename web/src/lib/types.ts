@@ -38,11 +38,14 @@ export interface Job {
     diarize: boolean
     naming: boolean
     ollama_model?: string | null
+    summary_template?: string | null
   }
   detected_language?: string | null
   speaker_map?: Record<string, SpeakerInfo>
   segments?: Segment[]
   output_paths?: Record<string, string>
+  summaries?: Record<string, string>
+  pending_summary?: string | null
   created_at: string
   finished_at?: string | null
 }
@@ -54,4 +57,5 @@ export interface UploadOptions {
   diarize: boolean
   naming: boolean
   ollama_model?: string
+  summary_template?: string
 }

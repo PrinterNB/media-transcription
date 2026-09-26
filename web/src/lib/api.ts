@@ -52,6 +52,44 @@ export async function clearJobs(): Promise<{ deleted_jobs: number }> {
   return parse(res)
 }
 
+export interface SummaryTemplate {
+  id: string
+  label: string
+}
+
+export async function fetchSummaryTemplates(): Promise<SummaryTemplate[]> {
+  const res = await fetch(`${BASE}/summary/templates`)
+  return parse(res)
+}
+
+export interface ChatMsg {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+export async function summarizeJob(id: string, template: string | null): Promise<any> {
+  const res = await fetch(`${BASE}/jobs/${id}/summarize`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ template }),
+  })
+  return parse(res)
+}
+
+export async function chatWithTranscript(
+  id: string,
+  message: string,
+  history: ChatMsg[],
+): Promise<string> {
+  const res = await fetch(`${BASE}/jobs/${id}/chat`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ message, history: history.slice(-10) }),
+  })
+  const body = await parse(res)
+  return body.reply as string
+}
+
 export async function createJob(file: Blob, fileName: string, opts: UploadOptions): Promise<Job> {
   const fd = new FormData()
   // name it so the server keeps the original basename for display
@@ -62,6 +100,7 @@ export async function createJob(file: Blob, fileName: string, opts: UploadOption
   fd.append('diarize', String(opts.diarize))
   fd.append('naming', String(opts.naming))
   if (opts.ollama_model) fd.append('ollama_model', opts.ollama_model)
+  if (opts.summary_template) fd.append('summary_template', opts.summary_template)
   const res = await fetch(`${BASE}/jobs`, { method: 'POST', body: fd })
   return parse(res)
 }

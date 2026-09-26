@@ -7,7 +7,7 @@ from pathlib import Path
 
 from ..config import settings
 from ..db import get_db
-from ..pipeline import audio
+from ..pipeline import audio, summarize
 from ..pipeline.worker import get_worker
 
 router = APIRouter(prefix="/api")
@@ -40,11 +40,18 @@ async def create_job(
     diarize: str = Form("true"),
     naming: str = Form("true"),
     ollama_model: str | None = Form(None),
+    summary_template: str | None = Form(None),
 ):
     asr = (asr or "canary").strip()
     if asr not in ("canary", "whisper"):
         raise HTTPException(422, "asr must be 'canary' or 'whisper'")
     is_extracted = _b(extracted)
+
+    # Optional summary to run as soon as transcription finishes (the worker
+    # picks it up from pending_summary). Blank = decide later from the UI.
+    summary_template = (summary_template or "").strip() or None
+    if summary_template and not summarize.get_template(summary_template):
+        raise HTTPException(400, f"unknown summary template: {summary_template}")
 
     db = get_db()
     job = db.create(
@@ -57,7 +64,9 @@ async def create_job(
             "diarize": _b(diarize),
             "naming": _b(naming),
             "ollama_model": (ollama_model or "").strip() or None,
+            "summary_template": summary_template,
         },
+        pending_summary=summary_template,
     )
     job_id = job["id"]
     job_dir = settings().uploads_dir / job_id

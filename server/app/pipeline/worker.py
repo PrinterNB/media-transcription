@@ -23,7 +23,7 @@ from pathlib import Path
 from ..config import settings
 from ..db import get_db
 from ..models.manager import get_manager
-from . import align, audio, naming, outputs
+from . import align, audio, naming, outputs, summarize
 
 log = logging.getLogger(__name__)
 
@@ -207,6 +207,31 @@ class JobWorker:
                 s.outputs_dir, job_id, job["source_name"], duration,
                 speaker_map, segments,
             )
+            # Pending summary (picked in the UI while the job was running).
+            # Fresh DB read: pending_summary may have been set after the row
+            # loaded at the top of _run.
+            pending = ((db.get(job_id) or {}).get("pending_summary") or "").strip() or None
+            if pending and summarize.get_template(pending):
+                if not self._cancelled(job_id):
+                    db.update(job_id, message=f"Summarizing ({pending})…")
+                    # Idempotent: a no-op if the naming stage already freed
+                    # VRAM, required when naming was skipped for this job.
+                    manager.prepare_for_ollama()
+                    try:
+                        text = summarize.run_template(
+                            {"segments": segments, "speaker_map": speaker_map, "options": opts},
+                            pending, model=ollama_model, progress_cb=rep,
+                        )
+                        if text:
+                            stored = db.get(job_id) or {}
+                            summaries = dict(stored.get("summaries") or {})
+                            summaries[pending] = text
+                            db.update(job_id, summaries=summaries)
+                        else:
+                            log.warning("summary for %s came back empty", job_id)
+                    except Exception:  # noqa: BLE001
+                        log.exception("auto summary failed for %s", job_id)
+                db.update(job_id, pending_summary=None)
             rep(1.0, "done")
             db.update(
                 job_id, status="done", stage="done", progress=100, message="Done",

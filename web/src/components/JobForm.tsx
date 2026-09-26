@@ -7,6 +7,7 @@ export interface FormState {
   diarize: boolean
   naming: boolean
   ollama_model: string
+  summary_template: string
 }
 
 export const DEFAULT_FORM: FormState = {
@@ -15,10 +16,11 @@ export const DEFAULT_FORM: FormState = {
   diarize: true,
   naming: true,
   ollama_model: '',
+  summary_template: '',
 }
 
 import { useEffect, useState, type ReactNode } from 'react'
-import { fetchOllamaModels } from '../lib/api'
+import { fetchOllamaModels, fetchSummaryTemplates, type SummaryTemplate } from '../lib/api'
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return (
@@ -68,11 +70,15 @@ export default function JobForm({
   const set = (patch: Partial<FormState>) => onChange({ ...value, ...patch })
   // null = still loading; [] = Ollama up but empty (treated as unreachable)
   const [models, setModels] = useState<string[] | null>(null)
+  const [templates, setTemplates] = useState<SummaryTemplate[]>([])
   useEffect(() => {
     let alive = true
     fetchOllamaModels()
       .then((r) => alive && setModels(r.models || []))
       .catch(() => alive && setModels([]))
+    fetchSummaryTemplates()
+      .then((t) => alive && setTemplates(t))
+      .catch(() => alive && setTemplates([]))
     return () => {
       alive = false
     }
@@ -135,6 +141,20 @@ export default function JobForm({
                 ))}
               </>
             )}
+          </select>
+        </Field>
+        <Field label="Summary" hint="runs when transcription finishes">
+          <select
+            value={value.summary_template}
+            onChange={(e) => set({ summary_template: e.target.value })}
+            className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-emerald-600"
+          >
+            <option value="">None (ask after it's done)</option>
+            {templates.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.label}
+              </option>
+            ))}
           </select>
         </Field>
       </div>

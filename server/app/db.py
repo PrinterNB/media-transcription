@@ -17,6 +17,10 @@ from typing import Any
 
 from .config import settings
 
+# Sentinel for update(): distinguishes "not provided" from an explicit None
+# (which must write SQL NULL, e.g. clearing pending_summary).
+_UNSET = object()
+
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -51,20 +55,35 @@ class Jobs:
                     speaker_map TEXT,
                     segments TEXT,
                     output_paths TEXT,
+                    summaries TEXT,
+                    pending_summary TEXT,
                     created_at TEXT NOT NULL,
                     finished_at TEXT
                 )
                 """
             )
+            # Migrate older databases: add any column missing from the schema.
+            cols = {
+                r["name"] for r in c.execute("PRAGMA table_info(jobs)")
+            }
+            for col in ("summaries", "pending_summary"):
+                if col not in cols:
+                    c.execute(f"ALTER TABLE jobs ADD COLUMN {col} TEXT")
 
     # ---- create / read ----
-    def create(self, source_name: str, size_bytes: int, options: dict) -> dict:
+    def create(
+        self,
+        source_name: str,
+        size_bytes: int,
+        options: dict,
+        pending_summary: str | None = None,
+    ) -> dict:
         job_id = uuid.uuid4().hex
         with self._lock, self._conn() as c:
             c.execute(
                 "INSERT INTO jobs (id, source_name, size_bytes, status, stage,"
-                " progress, message, options, created_at)"
-                " VALUES (?,?,?,?,?,?,?,?,?)",
+                " progress, message, options, pending_summary, created_at)"
+                " VALUES (?,?,?,?,?,?,?,?,?,?)",
                 (
                     job_id,
                     source_name,
@@ -74,6 +93,7 @@ class Jobs:
                     0,
                     "queued",
                     json.dumps(options),
+                    pending_summary,
                     _now(),
                 ),
             )
@@ -100,7 +120,7 @@ class Jobs:
 
     def _row(self, r: sqlite3.Row) -> dict:
         d = dict(r)
-        for key in ("options", "speaker_map", "segments", "output_paths"):
+        for key in ("options", "speaker_map", "segments", "output_paths", "summaries"):
             raw = d.get(key)
             d[key] = json.loads(raw) if raw else (d.get(key))
         return d
@@ -120,6 +140,8 @@ class Jobs:
         speaker_map: dict | None = None,
         segments: list | None = None,
         output_paths: dict | None = None,
+        summaries: dict | None = None,
+        pending_summary: str | None = _UNSET,
         finished: bool = False,
     ) -> None:
         fields: list[str] = []
@@ -144,6 +166,10 @@ class Jobs:
             fields.append("segments=?"); args.append(json.dumps(segments))
         if output_paths is not None:
             fields.append("output_paths=?"); args.append(json.dumps(output_paths))
+        if summaries is not None:
+            fields.append("summaries=?"); args.append(json.dumps(summaries))
+        if pending_summary is not _UNSET:
+            fields.append("pending_summary=?"); args.append(pending_summary)
         if finished:
             fields.append("finished_at=?"); args.append(_now())
         if not fields:
