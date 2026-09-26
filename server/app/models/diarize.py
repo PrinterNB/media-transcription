@@ -40,20 +40,48 @@ class Diarizer:
     def load(self) -> None:
         if self._pipe is not None:
             return
-        # Manual install (README, option B): the gated repo's files under
-        # models/pyannote-speaker-diarization-3.1/ — no HF token needed.
+        # Manual install (README, option B): the pipeline config under
+        # models/pyannote-speaker-diarization-3.1/. NOTE the underlying
+        # segmentation model is still downloaded from the hub and is gated
+        # too, so a token is still required (see gated_hint below).
         local = local_model_dir("pyannote-speaker-diarization-3.1")
         if local is None and not self.hf_token:
             raise DiarizationError(
-                "Speaker diarization needs a Hugging Face token (the pyannote model "
-                "is gated). Get one at https://huggingface.co/settings/tokens and set "
-                "HF_TOKEN in .env. You must also accept the model terms at "
-                "https://huggingface.co/pyannote/speaker-diarization-3.1 — then "
-                "diarization will work."
+                "Speaker diarization needs a Hugging Face token (the pyannote "
+                "models are gated). Get one at https://huggingface.co/settings/"
+                "tokens and set HF_TOKEN in .env. You must also accept the "
+                "model terms at BOTH https://huggingface.co/pyannote/"
+                "speaker-diarization-3.1 AND https://huggingface.co/pyannote/"
+                "segmentation-3.0 — then diarization will work."
             )
         import torch
         from pyannote.audio import Pipeline
 
+        # The diarization pipeline downloads TWO gated repos: its own
+        # speaker-diarization-3.1 AND the segmentation-3.0 model named in its
+        # config. A 403 on either one must name both pages below.
+        gated_hint = (
+            "Could not download the gated pyannote diarization models. With "
+            "your logged-in Hugging Face account, accept the terms for BOTH "
+            "repos —\n"
+            "  1. https://huggingface.co/pyannote/speaker-diarization-3.1\n"
+            "  2. https://huggingface.co/pyannote/segmentation-3.0\n"
+            "— then make sure a valid HF_TOKEN is set in .env (create one at "
+            "https://huggingface.co/settings/tokens)."
+        )
+
+        # The pyannote checkpoints in this venv predate PyTorch 2.6's
+        # weights_only=True torch.load default; pl_load raises
+        # UnpicklingError without the override. (We trust HF-hub sources.)
+        orig_torch_load = torch.load
+
+        def _lenient_torch_load(*args, **kwargs):
+            # lightning passes weights_only=None, which torch 2.6+ reads as True
+            if kwargs.get("weights_only") is None:
+                kwargs["weights_only"] = False
+            return orig_torch_load(*args, **kwargs)
+
+        torch.load = _lenient_torch_load
         try:
             if local is not None:
                 # Pipeline.from_pretrained takes the config file (or a hub id),
@@ -73,16 +101,25 @@ class Diarizer:
         except DiarizationError:
             raise
         except Exception as e:  # noqa: BLE001
+            # pyannote swallows a gated-repo download failure: Model.from_
+            # pretrained prints "Could not download ..." and returns None,
+            # which then surfaces as "'NoneType' object has no attribute
+            # 'eval'". Map that onto the same friendly error.
             msg = str(e)
-            if "403" in msg or "gated" in msg.lower() or "force" in msg.lower():
-                raise DiarizationError(
-                    "Could not download the gated pyannote model (403). Confirm your "
-                    "HF_TOKEN has read access and you've accepted the model terms at "
-                    "https://huggingface.co/pyannote/speaker-diarization-3.1, and that "
-                    f"HF_TOKEN is set. Details: {msg}"
-                ) from e
+            if (
+                "403" in msg
+                or "gated" in msg.lower()
+                or "force" in msg.lower()
+                or (type(e).__name__ == "AttributeError" and "NoneType" in msg)
+            ):
+                raise DiarizationError(gated_hint + f"\nDetails: {msg}") from e
             raise
-        self._pipe.to(torch.device("cuda")).eval()
+        finally:
+            torch.load = orig_torch_load
+        if self._pipe is None:  # from_pretrained gives up and returns None
+            raise DiarizationError(gated_hint)
+        # NB: no .eval() here — pyannote's Pipeline is not an nn.Module.
+        self._pipe.to(torch.device("cuda"))
         try:
             self._pipe = self._pipe.instantiate({"use_speaker_verification": True})
         except Exception:  # noqa: BLE001
@@ -101,7 +138,11 @@ class Diarizer:
     def diarize(self, wav_path: str) -> list[DiarizationTrack]:
         if self._pipe is None:
             self.load()
-        res = self._pipe({"waveform": wav_path, "sample_rate": 16000})
+        # Pass the path itself: the pipeline's Audio loader loads, resamples
+        # (16 kHz) and downmixes. (The old {"waveform": <path>} dict form is
+        # wrong for pyannote.audio 3.x — "waveform" must be a (ch, time)
+        # tensor, and a path there crashes validate_file.)
+        res = self._pipe(wav_path)
         tracks: list[DiarizationTrack] = []
         for turn, _, speaker in res.itertracks(yield_label=True):
             tracks.append(DiarizationTrack(start=turn.start, end=turn.end, speaker=speaker))

@@ -51,11 +51,18 @@ Install each of these (Windows PowerShell):
    every model Ollama has and lets you pick one per job, and the default is the
    `OLLAMA_MODEL` value in `.env` (currently `qwen-fast`). If Ollama is offline,
    jobs still complete — speakers just keep their `Speaker N` labels.
-5. **A Hugging Face token** with access to the gated
-   [`pyannote/speaker-diarization-3.1`](https://huggingface.co/pyannote/speaker-diarization-3.1):
-   accept the model's terms on that page, create a token at
-   <https://huggingface.co/settings/tokens>, and put it in `.env` as
-   `HF_TOKEN=hf_...`.
+5. **A Hugging Face token** with access to the gated pyannote models.
+   Speaker diarization needs **two** gated repos, and you must accept the
+   terms on **both** pages (each has its own acceptance button):
+
+   1. [`pyannote/speaker-diarization-3.1`](https://huggingface.co/pyannote/speaker-diarization-3.1)
+   2. [`pyannote/segmentation-3.0`](https://huggingface.co/pyannote/segmentation-3.0)
+      (the segmentation model the diarization pipeline downloads internally)
+
+   Then create a token at <https://huggingface.co/settings/tokens> and put it
+   in `.env` as `HF_TOKEN=hf_...`. If you've only accepted one of the two
+   repos, the job fails with `Hugging Face 403 / "gated"` (or the cryptic
+   `'NoneType' object has no attribute 'eval'`) — see Troubleshooting.
 
 ## Setup
 
@@ -110,7 +117,8 @@ partially-filled cache folder and re-run, e.g.
 
 Create `models/` in the project root with one subfolder per model. All three
 repos are plain file downloads from Hugging Face (a free account covers all
-of them; one additionally needs the accept-terms click):
+of them; the pyannote ones additionally need the accept-terms click and a
+`HF_TOKEN`):
 
 - **Canary qwen-2.5b** → `models\canary-qwen-2.5b\` — from
   [nvidia/canary-qwen-2.5b](https://huggingface.co/nvidia/canary-qwen-2.5b).
@@ -127,10 +135,11 @@ of them; one additionally needs the accept-terms click):
   [pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1).
   This one is **gated**: log in to Hugging Face and click *Agree and
   continue* on the repo page first, then copy the whole repo (a handful of
-  KB: `config.yaml` + `handler.py`). With the folder in place, no `HF_TOKEN`
-  is needed. Note the repo is just the pipeline config — on first load the
-  ~1 GB of underlying public model files it references are still downloaded
-  from the hub (cached after that).
+  KB: `config.yaml` + `handler.py`). Note the repo is just the pipeline
+  config — on first load the ~1 GB of underlying model files it references
+  are still downloaded from the hub (cached after that), and the segmentation
+  model (`pyannote/segmentation-3.0`) is **gated too**: accept its terms as
+  well and keep a valid `HF_TOKEN` in `.env`.
 
 The preload script picks manual installs up too: it loads them to verify and
 skips the corresponding download.
@@ -189,9 +198,11 @@ non-synced drive) before it starts holding gigabytes of uploads.**
 ## Troubleshooting
 
 - **Hugging Face 403 / "gated" error** — `HF_TOKEN` is missing, lacks read
-  access, or the model terms weren't accepted. Accept the terms at
-  `huggingface.co/pyannote/speaker-diarization-3.1` and check the token in
-  `.env`.
+  access, or the model terms weren't accepted. The diarizer needs **both**
+  gated repos accepted: `huggingface.co/pyannote/speaker-diarization-3.1`
+  **and** `huggingface.co/pyannote/segmentation-3.0`, then check the token
+  in `.env`. A missing second repo shows up as `'NoneType' object has no
+  attribute 'eval'` (pyannote swallows the 403 and returns `None`).
 - **"No audio track found" job error** — the uploaded file has no audio
   stream (empty video, image, …). There's nothing to transcribe.
 - **CUDA out of memory** — close other GPU apps (games, browsers with
