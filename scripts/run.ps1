@@ -44,9 +44,14 @@ try {
     }
     if ($needBuild) {
         Write-Host "Building web frontend (npm run build)..."
-        npm.cmd run build
-        if ($LASTEXITCODE -ne 0) {
-            throw "npm run build failed (exit code $LASTEXITCODE)"
+        Push-Location "web"
+        try {
+            npm.cmd run build
+            if ($LASTEXITCODE -ne 0) {
+                throw "npm run build failed (exit code $LASTEXITCODE)"
+            }
+        } finally {
+            Pop-Location
         }
     } else {
         Write-Host "web\dist is up to date."
