@@ -89,7 +89,7 @@ function DetailPane({
 }
 
 export default function App() {
-  const { jobs, selected, selectedId, select, submitJob, cancel, health } = useJobs()
+  const { jobs, selected, selectedId, select, submitJob, cancel, clearHistory, health } = useJobs()
   const [creating, setCreating] = useState(jobs.length > 0 ? false : true)
 
   const openNew = () => setCreating(true)
@@ -102,7 +102,7 @@ export default function App() {
     <div className="flex h-full">
       <aside className="flex w-80 shrink-0 flex-col border-r border-zinc-800 p-3">
         <h1 className="mb-3 px-1 text-lg font-bold text-zinc-100">Transcription</h1>
-        <JobList jobs={jobs} selectedId={creating ? null : selectedId} onSelect={openJob} onNew={openNew} />
+        <JobList jobs={jobs} selectedId={creating ? null : selectedId} onSelect={openJob} onNew={openNew} onClear={clearHistory} />
         <footer className="mt-3 px-1 text-[11px] leading-4 text-zinc-600">
           {health ? (
             <>

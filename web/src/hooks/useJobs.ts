@@ -78,5 +78,19 @@ export function useJobs() {
     }
   }, [])
 
-  return { jobs, selected, selectedId, select, submitJob, cancel, health }
+  const clearHistory = useCallback(async () => {
+    const ok = window.confirm(
+      'Clear job history? This deletes all jobs plus their uploaded files and outputs.',
+    )
+    if (!ok) return
+    try {
+      await api.clearJobs()
+      setSelectedId(null)
+      await refresh()
+    } catch (e) {
+      window.alert(`Could not clear history: ${e instanceof Error ? e.message : String(e)}`)
+    }
+  }, [refresh])
+
+  return { jobs, selected, selectedId, select, submitJob, cancel, clearHistory, health }
 }

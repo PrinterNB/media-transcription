@@ -47,6 +47,11 @@ export async function cancelJob(id: string): Promise<Job> {
   return parse(res)
 }
 
+export async function clearJobs(): Promise<{ deleted_jobs: number }> {
+  const res = await fetch(`${BASE}/jobs`, { method: 'DELETE' })
+  return parse(res)
+}
+
 export async function createJob(file: Blob, fileName: string, opts: UploadOptions): Promise<Job> {
   const fd = new FormData()
   // name it so the server keeps the original basename for display

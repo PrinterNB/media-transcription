@@ -93,6 +93,11 @@ class Jobs:
             ).fetchall()
         return [self._row(r) for r in rows]
 
+    def delete_all(self) -> int:
+        with self._lock, self._conn() as c:
+            cur = c.execute("DELETE FROM jobs")
+            return cur.rowcount
+
     def _row(self, r: sqlite3.Row) -> dict:
         d = dict(r)
         for key in ("options", "speaker_map", "segments", "output_paths"):

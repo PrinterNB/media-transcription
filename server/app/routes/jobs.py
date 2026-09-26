@@ -1,11 +1,13 @@
 """GET /api/jobs, /{id}, /{id}/events (SSE), POST /{id}/cancel."""
 from __future__ import annotations
 
+import shutil
 from typing import AsyncIterator
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
+from ..config import settings
 from ..db import get_db
 from ..pipeline.worker import get_worker, TERMINAL
 
@@ -48,6 +50,21 @@ async def job_events(job_id: str):
             "Connection": "keep-alive",
         },
     )
+
+
+@router.delete("/jobs")
+async def clear_jobs():
+    """Clear job history and delete all uploads/outputs on disk."""
+    db = get_db()
+    s = settings()
+    if any(j["status"] not in TERMINAL for j in db.list()):
+        raise HTTPException(409, "a job is still running — cancel it first")
+    for d in (s.uploads_dir, s.outputs_dir):
+        if d.is_dir():
+            for child in d.iterdir():
+                shutil.rmtree(child) if child.is_dir() else child.unlink(missing_ok=True)
+    deleted = db.delete_all()
+    return {"deleted_jobs": deleted}
 
 
 @router.post("/jobs/{job_id}/cancel")

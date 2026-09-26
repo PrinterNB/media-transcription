@@ -20,20 +20,31 @@ export default function JobList({
   selectedId,
   onSelect,
   onNew,
+  onClear,
 }: {
   jobs: Job[]
   selectedId: string | null
   onSelect: (id: string) => void
   onNew: () => void
+  onClear: () => void
 }) {
   return (
     <div className="flex h-full flex-col">
-      <button
-        onClick={onNew}
-        className="mb-3 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm font-medium text-zinc-200 hover:border-zinc-700"
-      >
-        + New transcription
-      </button>
+      <div className="mb-3 flex gap-2">
+        <button
+          onClick={onNew}
+          className="flex-1 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm font-medium text-zinc-200 hover:border-zinc-700"
+        >
+          + New transcription
+        </button>
+        <button
+          onClick={onClear}
+          title="Clear job history and delete all inputs and outputs"
+          className="rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-400 hover:border-red-900 hover:text-red-300"
+        >
+          Clear
+        </button>
+      </div>
 
       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
         {jobs.length === 0 && (
