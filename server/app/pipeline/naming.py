@@ -166,6 +166,32 @@ def infer_names(
     return speaker_map
 
 
+def unload_all(ollama_url: str | None = None) -> None:
+    """Ask Ollama to unload every model currently resident in VRAM.
+
+    Called when a job starts so a model left over from a previous run (Ollama
+    keeps models warm by default) frees VRAM before ASR loads. Never raises —
+    a missing/unreachable Ollama just means there's nothing loaded by us.
+    """
+    s = settings()
+    url = (ollama_url or s.ollama_url).rstrip("/")
+    try:
+        resp = httpx.get(url + "/api/ps", timeout=10.0)
+        resp.raise_for_status()
+        models = [m["name"] for m in resp.json().get("models", [])]
+    except (httpx.HTTPError, ValueError, KeyError):
+        return
+    for name in models:
+        try:
+            httpx.post(
+                url + "/api/generate",
+                json={"model": name, "keep_alive": 0},
+                timeout=60.0,
+            ).raise_for_status()
+        except httpx.HTTPError:
+            pass
+
+
 def _chat(url: str, payload: dict) -> dict | None:
     """POST /api/chat, return parsed speaker mapping or None (robust)."""
     try:

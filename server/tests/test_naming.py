@@ -72,3 +72,35 @@ def test_infer_names_no_segments():
     # should not raise and returns an empty map (even with _chat unpatched,
     # zero chunks means no network call)
     assert naming.infer_names([]) == {}
+
+
+class _Resp:
+    def __init__(self, payload):
+        self._payload = payload
+
+    def raise_for_status(self):
+        pass
+
+    def json(self):
+        return self._payload
+
+
+def test_unload_all_unloads_running_models(monkeypatch):
+    posts = []
+    monkeypatch.setattr(
+        naming.httpx, "get",
+        lambda url, timeout=10.0: _Resp({"models": [{"name": "qwen-fast:latest"}]}),
+    )
+    monkeypatch.setattr(
+        naming.httpx, "post",
+        lambda url, json=None, timeout=60.0: posts.append((url, json)) or _Resp({}),
+    )
+    naming.unload_all(ollama_url="http://x")
+    assert posts == [("http://x/api/generate", {"model": "qwen-fast:latest", "keep_alive": 0})]
+
+
+def test_unload_all_tolerates_unreachable_ollama(monkeypatch):
+    def boom(*a, **k):
+        raise naming.httpx.HTTPError("down")
+    monkeypatch.setattr(naming.httpx, "get", boom)
+    naming.unload_all(ollama_url="http://x")  # must not raise

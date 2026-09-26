@@ -131,6 +131,10 @@ class JobWorker:
             self._fail(job_id, "No uploaded file found for this job.")
             return
 
+        # Ollama keeps models warm between requests; unload any so they don't
+        # sit in VRAM next to the ASR model (and free room for this job).
+        naming.unload_all()
+
         opts = job.get("options", {}) or {}
         opts = _fill_defaults(opts)
         backend = opts.get("asr", s.asr_default)
