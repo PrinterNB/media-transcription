@@ -12,6 +12,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from ..config import local_model_dir
+
 
 class DiarizationError(Exception):
     pass
@@ -38,7 +40,10 @@ class Diarizer:
     def load(self) -> None:
         if self._pipe is not None:
             return
-        if not self.hf_token:
+        # Manual install (README, option B): the gated repo's files under
+        # models/pyannote-speaker-diarization-3.1/ — no HF token needed.
+        local = local_model_dir("pyannote-speaker-diarization-3.1")
+        if local is None and not self.hf_token:
             raise DiarizationError(
                 "Speaker diarization needs a Hugging Face token (the pyannote model "
                 "is gated). Get one at https://huggingface.co/settings/tokens and set "
@@ -50,9 +55,23 @@ class Diarizer:
         from pyannote.audio import Pipeline
 
         try:
-            self._pipe = Pipeline.from_pretrained(
-                self.model_id, use_auth_token=self.hf_token
-            )
+            if local is not None:
+                # Pipeline.from_pretrained takes the config file (or a hub id),
+                # not a directory — point it at the folder's config.yaml.
+                config_yml = local / "config.yaml"
+                if not config_yml.is_file():
+                    raise DiarizationError(
+                        f"Manual pyannote install is incomplete: {config_yml} is "
+                        "missing. Put the whole gated repo (config.yaml, handler.py) "
+                        "in that folder — see the README (option B)."
+                    )
+                self._pipe = Pipeline.from_pretrained(str(config_yml))
+            else:
+                self._pipe = Pipeline.from_pretrained(
+                    self.model_id, use_auth_token=self.hf_token
+                )
+        except DiarizationError:
+            raise
         except Exception as e:  # noqa: BLE001
             msg = str(e)
             if "403" in msg or "gated" in msg.lower() or "force" in msg.lower():

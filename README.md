@@ -51,17 +51,72 @@ Copy-Item .env.example .env
 # edit .env: set HF_TOKEN=hf_... (see .env.example for everything else)
 ```
 
-## Preload models (first time only)
+## Models (~9 GB, one time)
+
+The app needs three model families, ~9 GB total (canary ~5.5 GB, Whisper
+large-v3 ~3.1 GB, pyannote ~1 GB). Install them either with the preload
+script (**Option A**) or by downloading the files yourself (**Option B**).
+You can also mix them — every model resolves independently, so a manual
+canary plus a script-downloaded whisper works fine. When a model's folder
+exists under `models/` in the project root (or `MODELS_DIR` from `.env`, if
+you set it), the app uses that folder automatically — no other configuration
+needed. `models/` is gitignored.
+
+### Option A — preload script
 
 ```powershell
 .venv\Scripts\python scripts\preload_models.py
 ```
 
-Downloads everything once (~9 GB: canary ~5.5 GB, Whisper large-v3 ~3.1 GB,
-pyannote ~1 GB) into the Hugging Face cache (`~/.cache/huggingface` on Windows)
-and prints progress per model. Each step is independent, so one failure (e.g.
-missing `HF_TOKEN`) doesn't stop the others. The app would download the same
-files on first use anyway — this just does it up front with clearer output.
+Downloads everything once into the Hugging Face cache
+(`C:\Users\<you>\.cache\huggingface` on Windows) and prints progress per
+model. Each step is independent, so one failure (e.g. missing `HF_TOKEN`)
+doesn't stop the others. The app would download the same files on first use
+anyway — this just does it up front with clearer output.
+
+To check what's already local without touching the network (e.g. an
+air-gapped machine):
+
+```powershell
+.venv\Scripts\python scripts\preload_models.py --local-only
+```
+
+**`[WinError 1314] A required privilege is not held by the client`** is a
+Windows file-lock/privilege glitch in huggingface_hub when it moves a fresh
+download into the cache. The script already retries these, clearing the
+partial cache snapshot between attempts. If it still fails, delete the
+partially-filled cache folder and re-run, e.g.
+`C:\Users\<you>\.cache\huggingface\hub\models--Systran--faster-whisper-large-v3`
+(or whichever `models--*` folder was being written when it stopped).
+
+### Option B — download the files yourself
+
+Create `models/` in the project root with one subfolder per model. All three
+repos are plain file downloads from Hugging Face (a free account covers all
+of them; one additionally needs the accept-terms click):
+
+- **Canary qwen-2.5b** → `models\canary-qwen-2.5b\` — from
+  [nvidia/canary-qwen-2.5b](https://huggingface.co/nvidia/canary-qwen-2.5b).
+  The whole repo is two files (~5.1 GB): `config.json` +
+  `model.safetensors`. Note: on first load NeMo also fetches the small
+  (~16 MB) Qwen tokenizer files it references, so a manual canary install
+  still needs the network once (they're cached after that).
+- **Whisper large-v3** → `models\faster-whisper-large-v3\` — from
+  [Systran/faster-whisper-large-v3](https://huggingface.co/Systran/faster-whisper-large-v3).
+  All five files: `model.bin`, `config.json`, `tokenizer.json`,
+  `vocabulary.json`, `preprocessor_config.json`.
+- **pyannote speaker-diarization-3.1** →
+  `models\pyannote-speaker-diarization-3.1\` — from
+  [pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1).
+  This one is **gated**: log in to Hugging Face and click *Agree and
+  continue* on the repo page first, then copy the whole repo (a handful of
+  KB: `config.yaml` + `handler.py`). With the folder in place, no `HF_TOKEN`
+  is needed. Note the repo is just the pipeline config — on first load the
+  ~1 GB of underlying public model files it references are still downloaded
+  from the hub (cached after that).
+
+The preload script picks manual installs up too: it loads them to verify and
+skips the corresponding download.
 
 ## Run
 

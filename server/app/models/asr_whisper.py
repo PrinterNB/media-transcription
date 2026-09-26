@@ -7,6 +7,7 @@ the detected language.
 """
 from __future__ import annotations
 
+from ..config import local_model_dir
 from .asr_base import ProgressCB, Segment, Word
 
 
@@ -26,7 +27,12 @@ class WhisperTranscriber:
             return
         from faster_whisper import WhisperModel
 
-        self._model = WhisperModel(self.model_id, device="cuda", compute_type="float16")
+        # Manual install (README, option B): models/faster-whisper-large-v3/
+        # (model.bin + 4 config files) wins over the hub id; WhisperModel
+        # loads that directory natively. Absent folder -> the hub path,
+        # unchanged.
+        source = str(local_model_dir("faster-whisper-large-v3") or self.model_id)
+        self._model = WhisperModel(source, device="cuda", compute_type="float16")
 
     def unload(self) -> None:
         if self._model is None:

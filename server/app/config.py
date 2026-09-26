@@ -39,11 +39,18 @@ def settings() -> "Settings":
     (data_dir / "uploads").mkdir(exist_ok=True)
     (data_dir / "outputs").mkdir(exist_ok=True)
 
+    # Manually-downloaded models (README, option B). Not created here — a
+    # missing folder just means "load everything from the Hugging Face hub".
+    models_dir = Path(os.environ.get("MODELS_DIR", "models"))
+    if not models_dir.is_absolute():
+        models_dir = _PROJECT_ROOT / models_dir
+
     return Settings(
         data_dir=data_dir,
         uploads_dir=data_dir / "uploads",
         outputs_dir=data_dir / "outputs",
         db_path=data_dir / "transcription.db",
+        models_dir=models_dir,
         hf_token=os.environ.get("HF_TOKEN", ""),
         ollama_url=os.environ.get("OLLAMA_URL", "http://localhost:11434"),
         ollama_model=os.environ.get("OLLAMA_MODEL", "qwen-fast"),
@@ -58,12 +65,24 @@ def settings() -> "Settings":
     )
 
 
+def local_model_dir(name: str) -> Path | None:
+    """Return ``<MODELS_DIR>/<name>`` if that folder exists, else ``None``.
+
+    A populated folder (manual download, README option B) is loaded in
+    preference to the Hugging Face hub id; when it is absent the loaders fall
+    back to the hub exactly as before.
+    """
+    p = settings().models_dir / name
+    return p if p.is_dir() else None
+
+
 @dataclass(frozen=True)
 class Settings:
     data_dir: Path
     uploads_dir: Path
     outputs_dir: Path
     db_path: Path
+    models_dir: Path
     hf_token: str
     ollama_url: str
     ollama_model: str

@@ -14,5 +14,6 @@ data/
 web/node_modules/
 web/dist/
 
-# model caches / logs
+# manually-downloaded model files (README option B) + caches / logs
+/models/
 *.log

@@ -29,6 +29,7 @@ import gc
 import os
 import re
 
+from ..config import local_model_dir
 from .asr_base import ProgressCB, Segment
 
 # 30s windows, no overlap (see module docstring). Long windows = fewer
@@ -67,9 +68,14 @@ class CanaryTranscriber:
                 "Canary requires the NeMo SALM loader but 'nemo' is not "
                 f"importable in this venv: {e}"
             ) from e
+        # Manual install (README, option B): models/canary-qwen-2.5b/
+        # (config.json + model.safetensors) wins over the hub id — NeMo
+        # resolves both from a local directory. (The small Qwen tokenizer
+        # files still resolve via the hub; public, cached after first use.)
+        source = str(local_model_dir("canary-qwen-2.5b") or self.model_id)
         try:
             self._model = (
-                SALM.from_pretrained(self.model_id).bfloat16().eval().to("cuda")
+                SALM.from_pretrained(source).bfloat16().eval().to("cuda")
             )
         except Exception as e:  # noqa: BLE001
             raise RuntimeError(
