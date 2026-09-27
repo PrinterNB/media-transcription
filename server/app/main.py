@@ -16,10 +16,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from . import auth
 from .config import settings
 from .pipeline import naming
 from .pipeline.worker import get_worker
-from .routes import downloads, jobs, uploads
+from .routes import admin, auth as auth_routes, downloads, jobs, uploads
 
 
 def _lan_ip() -> str:
@@ -35,6 +36,9 @@ def _lan_ip() -> str:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Seed admin + settings + backfill job owners BEFORE the worker starts,
+    # so `_resume_stale` only ever sees rows that have an owner.
+    auth.bootstrap()
     worker = get_worker()
     worker.start()
     s = settings()
@@ -74,6 +78,8 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    app.include_router(auth_routes.router)
+    app.include_router(admin.router)
     app.include_router(uploads.router)
     app.include_router(jobs.router)
     app.include_router(downloads.router)

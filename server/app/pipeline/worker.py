@@ -20,6 +20,7 @@ import queue as _queue
 import threading
 from pathlib import Path
 
+from .. import usage
 from ..config import settings
 from ..db import get_db
 from ..models.manager import get_manager
@@ -191,6 +192,7 @@ class JobWorker:
                     speaker_map = naming.infer_names(
                         segments, progress_cb=rep, model=ollama_model
                     )
+                usage.flush(job_id)
             elif do_naming and not do_diarize:
                 db.update(job_id, stage="naming", progress=95,
                           message="Naming skipped (diarization off)")
@@ -234,11 +236,12 @@ class JobWorker:
                     except Exception:  # noqa: BLE001
                         log.exception("auto summary failed for %s", job_id)
                 db.update(job_id, pending_summary=None)
+                usage.flush(job_id)
             rep(1.0, "done")
             db.update(
                 job_id, status="done", stage="done", progress=100, message="Done",
                 speaker_map=speaker_map, segments=[x.to_dict() for x in segments],
-                output_paths=paths, finished=True,
+                output_paths=paths, duration_sec=duration, finished=True,
             )
         except audio.AudioError as e:
             self._fail(job_id, f"Audio: {e}")

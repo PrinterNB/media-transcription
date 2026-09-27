@@ -1,12 +1,18 @@
-"""GET /api/jobs, /{id}, /{id}/events (SSE), POST /{id}/cancel, summarize, chat."""
+"""GET /api/jobs, /{id}, /{id}/events (SSE), POST /{id}/cancel, summarize, chat.
+
+All job routes are auth-gated: a user only ever sees (or can act on) their own
+jobs; admins see everything.
+"""
 from __future__ import annotations
 
 import shutil
 from typing import AsyncIterator
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 
+from .. import usage
+from ..auth import require_admin, require_user
 from ..config import settings
 from ..db import get_db
 from ..models.manager import get_manager
@@ -16,23 +22,37 @@ from ..pipeline.worker import get_worker, TERMINAL
 router = APIRouter(prefix="/api")
 
 
-@router.get("/jobs")
-async def list_jobs():
-    return get_db().list()
-
-
-@router.get("/jobs/{job_id}")
-async def get_job(job_id: str):
+def _get_job_for(job_id: str, user: dict) -> dict:
+    """The job, or 404 — including "not yours" (404, not 403, no leaking ids)."""
     job = get_db().get(job_id)
-    if not job:
+    if not job or (job.get("owner") != user["username"] and not user["is_admin"]):
         raise HTTPException(404, "no such job")
     return job
 
 
+def _remove_job_files(job_id: str) -> None:
+    """Delete a job's on-disk artifacts: uploads/<id>/ and outputs/<id>.*."""
+    s = settings()
+    job_dir = s.uploads_dir / job_id
+    if job_dir.is_dir():
+        shutil.rmtree(job_dir, ignore_errors=True)
+    for f in s.outputs_dir.glob(f"{job_id}.*"):
+        f.unlink(missing_ok=True)
+
+
+@router.get("/jobs")
+async def list_jobs(user: dict = Depends(require_user)):
+    return get_db().list(owner=user["username"])
+
+
+@router.get("/jobs/{job_id}")
+async def get_job(job_id: str, user: dict = Depends(require_user)):
+    return _get_job_for(job_id, user)
+
+
 @router.get("/jobs/{job_id}/events")
-async def job_events(job_id: str):
-    if not get_db().get(job_id):
-        raise HTTPException(404, "no such job")
+async def job_events(job_id: str, user: dict = Depends(require_user)):
+    _get_job_for(job_id, user)
 
     def snapshot() -> dict:
         j = get_db().get(job_id)
@@ -55,8 +75,8 @@ async def job_events(job_id: str):
 
 
 @router.delete("/jobs")
-async def clear_jobs():
-    """Clear job history and delete all uploads/outputs on disk."""
+async def clear_jobs(_: dict = Depends(require_admin)):
+    """Clear ALL users' job history and every upload/output on disk."""
     db = get_db()
     s = settings()
     if any(j["status"] not in TERMINAL for j in db.list()):
@@ -69,12 +89,34 @@ async def clear_jobs():
     return {"deleted_jobs": deleted}
 
 
+@router.delete("/jobs/mine")
+async def clear_my_jobs(user: dict = Depends(require_user)):
+    """Delete every one of MY jobs (rows + files). 409 if one is running."""
+    db = get_db()
+    jobs = db.list(owner=user["username"])
+    if any(j["status"] not in TERMINAL for j in jobs):
+        raise HTTPException(409, "a job is still running — cancel it first")
+    for j in jobs:
+        _remove_job_files(j["id"])
+    deleted = db.delete_jobs_by_owner(user["username"])
+    return {"deleted_jobs": deleted}
+
+
+@router.delete("/jobs/{job_id}")
+async def delete_job(job_id: str, user: dict = Depends(require_user)):
+    job = _get_job_for(job_id, user)
+    if job["status"] not in TERMINAL:
+        raise HTTPException(409, "job is still running — cancel it first")
+    _remove_job_files(job_id)
+    get_db().delete_job(job_id)
+    return {"deleted": True}
+
+
 @router.post("/jobs/{job_id}/cancel")
-async def cancel_job(job_id: str):
+async def cancel_job(job_id: str, user: dict = Depends(require_user)):
+    _get_job_for(job_id, user)
     db = get_db()
     job = db.get(job_id)
-    if not job:
-        raise HTTPException(404, "no such job")
     if job["status"] in TERMINAL:
         return job  # already finished; nothing to cancel
     get_worker().request_cancel(job_id)
@@ -95,12 +137,10 @@ def _other_job_live() -> bool:
 
 
 @router.post("/jobs/{job_id}/summarize")
-def summarize_job(job_id: str, body: dict | None = None):
+def summarize_job(job_id: str, body: dict | None = None, user: dict = Depends(require_user)):
     """Run a summary template (or null to clear the pending selection)."""
     db = get_db()
-    job = db.get(job_id)
-    if not job:
-        raise HTTPException(404, "no such job")
+    job = _get_job_for(job_id, user)
 
     template = (body or {}).get("template")
     if template is not None:
@@ -134,6 +174,7 @@ def summarize_job(job_id: str, body: dict | None = None):
             result = summarize.run_template(job, template, model)
     except ValueError as e:
         raise HTTPException(400, str(e))
+    usage.flush(job_id)
     if not (result or "").strip():
         raise HTTPException(502, "the summary model returned no output (is Ollama running?)")
     summaries = dict(job.get("summaries") or {})
@@ -143,12 +184,10 @@ def summarize_job(job_id: str, body: dict | None = None):
 
 
 @router.post("/jobs/{job_id}/chat")
-def chat_with_transcript(job_id: str, body: dict | None = None):
+def chat_with_transcript(job_id: str, body: dict | None = None, user: dict = Depends(require_user)):
     """Answer a question about a finished job's transcript."""
     db = get_db()
-    job = db.get(job_id)
-    if not job:
-        raise HTTPException(404, "no such job")
+    job = _get_job_for(job_id, user)
     if job["status"] != "done":
         raise HTTPException(400, "job is not finished yet")
     if not (job.get("segments") or []):
@@ -172,6 +211,7 @@ def chat_with_transcript(job_id: str, body: dict | None = None):
     get_manager().prepare_for_ollama()  # free ASR + diarizer BEFORE Ollama
     with naming.llm_session():  # frees resident Ollama models after
         reply = summarize.answer(job, message, history, model)
+    usage.flush(job_id)
     if not (reply or "").strip():
         raise HTTPException(502, "the chat model returned no output (is Ollama running?)")
     return {"reply": reply}

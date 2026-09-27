@@ -22,6 +22,7 @@ from typing import Callable
 
 import httpx
 
+from .. import usage
 from ..config import settings
 
 log = logging.getLogger(__name__)
@@ -224,7 +225,9 @@ def _chat(url: str, payload: dict) -> dict | None:
             url + "/api/chat", json=payload, timeout=httpx.Timeout(600.0, connect=10.0)
         )
         resp.raise_for_status()
-        content = resp.json().get("message", {}).get("content", "")
+        data = resp.json()
+        usage.add(int(data.get("prompt_eval_count", 0)), int(data.get("eval_count", 0)))
+        content = data.get("message", {}).get("content", "")
     except (httpx.HTTPError, ValueError, json.JSONDecodeError):
         # retry once on any transport/parse hiccup
         try:
@@ -232,7 +235,9 @@ def _chat(url: str, payload: dict) -> dict | None:
                 url + "/api/chat", json=payload, timeout=httpx.Timeout(600.0, connect=10.0)
             )
             resp.raise_for_status()
-            content = resp.json().get("message", {}).get("content", "")
+            data = resp.json()
+            usage.add(int(data.get("prompt_eval_count", 0)), int(data.get("eval_count", 0)))
+            content = data.get("message", {}).get("content", "")
         except Exception:  # noqa: BLE001
             return None
     return _parse_mapping(content)

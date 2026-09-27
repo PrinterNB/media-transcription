@@ -1,12 +1,16 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
+import { useSession } from './hooks/useSession'
 import { useJobs } from './hooks/useJobs'
 import JobList from './components/JobList'
+import TopBar from './components/TopBar'
+import AuthScreen from './components/AuthScreen'
+import AdminPanel from './components/admin/AdminPanel'
 import type { FormState } from './components/JobForm'
 import TranscriptView from './components/TranscriptView'
 import DownloadBar from './components/DownloadBar'
 import SummaryPanel from './components/SummaryPanel'
 import UploadPanel from './components/UploadPanel'
-import type { Job } from './lib/types'
+import type { Job, View } from './lib/types'
 
 function ProgressCard({ job }: { job: Job }) {
   return (
@@ -33,9 +37,11 @@ function ProgressCard({ job }: { job: Job }) {
 function DetailPane({
   job,
   onCancel,
+  onDelete,
 }: {
   job: Job
   onCancel: (id: string) => void
+  onDelete: (id: string) => void
 }) {
   const running = job.status === 'running' || job.status === 'queued'
   return (
@@ -51,14 +57,25 @@ function DetailPane({
             {job.detected_language ? ` · detected ${job.detected_language}` : ''}
           </p>
         </div>
-        {running && (
-          <button
-            onClick={() => onCancel(job.id)}
-            className="rounded-lg border border-red-900/60 px-3 py-1.5 text-xs font-medium text-red-400 hover:bg-red-950/40"
-          >
-            Cancel
-          </button>
-        )}
+        <div className="flex shrink-0 gap-2">
+          {running && (
+            <button
+              onClick={() => onCancel(job.id)}
+              className="rounded-lg border border-red-900/60 px-3 py-1.5 text-xs font-medium text-red-400 hover:bg-red-950/40"
+            >
+              Cancel
+            </button>
+          )}
+          {!running && (
+            <button
+              onClick={() => onDelete(job.id)}
+              title="Delete this job and its files"
+              className="rounded-lg border border-zinc-800 px-3 py-1.5 text-xs font-medium text-zinc-400 hover:border-red-900 hover:text-red-300"
+            >
+              Delete
+            </button>
+          )}
+        </div>
       </div>
 
       {job.status === 'error' && (
@@ -91,7 +108,20 @@ function DetailPane({
 }
 
 export default function App() {
-  const { jobs, selected, selectedId, select, submitJob, cancel, clearHistory, health } = useJobs()
+  const { user, loading, refresh, signOut } = useSession()
+  const [view, setView] = useState<View>('jobs')
+
+  // Session was lost (401 from the jobs poll). No-op while already logged out
+  // so the pre-login polling loop doesn't fire logout calls forever.
+  const handleAuthLost = useCallback(() => {
+    if (user) {
+      setView('jobs')
+      void signOut()
+    }
+  }, [user, signOut])
+
+  const { jobs, selected, selectedId, select, submitJob, cancel, clearHistory, deleteJob, health } =
+    useJobs(handleAuthLost)
   const [creating, setCreating] = useState(jobs.length > 0 ? false : true)
 
   const openNew = () => setCreating(true)
@@ -100,46 +130,82 @@ export default function App() {
     select(id)
   }
 
-  return (
-    <div className="flex h-full">
-      <aside className="flex w-80 shrink-0 flex-col border-r border-zinc-800 p-3">
-        <h1 className="mb-3 px-1 text-lg font-bold text-zinc-100">Transcription</h1>
-        <JobList jobs={jobs} selectedId={creating ? null : selectedId} onSelect={openJob} onNew={openNew} onClear={clearHistory} />
-        <footer className="mt-3 px-1 text-[11px] leading-4 text-zinc-600">
-          {health ? (
-            <>
-              ffmpeg {health.ffmpeg ? '✓' : '✗ missing'} · Ollama{' '}
-              {health.ollama_reachable ? '✓' : '✗ offline'}
-            </>
-          ) : (
-            'connecting…'
-          )}
-        </footer>
-      </aside>
+  if (loading) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="h-5 w-5 animate-spin rounded-full border-2 border-zinc-700 border-t-emerald-500" />
+      </div>
+    )
+  }
 
-      <main className="flex min-w-0 flex-1 flex-col">
-        {creating ? (
-          <div className="flex h-full overflow-y-auto p-4">
-            <div className="mx-auto w-full max-w-md">
-              <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-400">
-                New transcription
-              </h2>
-              <UploadPanel
-                onSubmit={async (blob, name, form: FormState & { extracted: boolean }) => {
-                  await submitJob(blob, name, form)
-                  setCreating(false)
-                }}
-              />
-            </div>
+  if (!user) {
+    return <AuthScreen onLoggedIn={refresh} />
+  }
+
+  return (
+    <div className="flex h-full flex-col">
+      <TopBar
+        user={user}
+        view={view}
+        setView={setView}
+        onSignOut={() => {
+          setView('jobs')
+          void signOut()
+        }}
+      />
+      <div className="flex min-h-0 flex-1">
+        {view === 'admin' && user.is_admin ? (
+          <div className="min-w-0 flex-1">
+            <AdminPanel me={user} />
           </div>
-        ) : selected ? (
-          <DetailPane job={selected} onCancel={cancel} />
         ) : (
-          <div className="flex h-full items-center justify-center text-sm text-zinc-600">
-            Select a job, or start a new transcription.
-          </div>
+          <>
+            <aside className="flex w-80 shrink-0 flex-col border-r border-zinc-800 p-3">
+              <JobList
+                jobs={jobs}
+                selectedId={creating ? null : selectedId}
+                onSelect={openJob}
+                onNew={openNew}
+                onClear={clearHistory}
+              />
+              <footer className="mt-3 px-1 text-[11px] leading-4 text-zinc-600">
+                {health ? (
+                  <>
+                    ffmpeg {health.ffmpeg ? '✓' : '✗ missing'} · Ollama{' '}
+                    {health.ollama_reachable ? '✓' : '✗ offline'}
+                  </>
+                ) : (
+                  'connecting…'
+                )}
+              </footer>
+            </aside>
+
+            <main className="flex min-w-0 flex-1 flex-col">
+              {creating ? (
+                <div className="flex h-full overflow-y-auto p-4">
+                  <div className="mx-auto w-full max-w-md">
+                    <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-400">
+                      New transcription
+                    </h2>
+                    <UploadPanel
+                      onSubmit={async (blob, name, form: FormState & { extracted: boolean }) => {
+                        await submitJob(blob, name, form)
+                        setCreating(false)
+                      }}
+                    />
+                  </div>
+                </div>
+              ) : selected ? (
+                <DetailPane job={selected} onCancel={cancel} onDelete={deleteJob} />
+              ) : (
+                <div className="flex h-full items-center justify-center text-sm text-zinc-600">
+                  Select a job, or start a new transcription.
+                </div>
+              )}
+            </main>
+          </>
         )}
-      </main>
+      </div>
     </div>
   )
 }

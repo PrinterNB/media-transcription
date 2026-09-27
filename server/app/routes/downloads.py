@@ -3,10 +3,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 
+from ..auth import require_user
 from ..db import get_db
+from .jobs import _get_job_for
 
 router = APIRouter(prefix="/api")
 
@@ -20,13 +22,11 @@ _MEDIA = {
 
 
 @router.get("/jobs/{job_id}/download")
-async def download(job_id: str, fmt: str = "txt"):
+async def download(job_id: str, fmt: str = "txt", user: dict = Depends(require_user)):
     fmt = (fmt or "txt").lower()
     if fmt not in _EXT:
         raise HTTPException(422, "fmt must be one of: txt, srt, vtt, json")
-    job = get_db().get(job_id)
-    if not job:
-        raise HTTPException(404, "no such job")
+    job = _get_job_for(job_id, user)
     if job["status"] != "done":
         raise HTTPException(409, "job not finished yet")
     paths = job.get("output_paths") or {}

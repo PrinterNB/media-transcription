@@ -34,6 +34,8 @@ dependencies = [
     # import only needs the core + asr + speechlm2-only groups.
     "nemo_toolkit[asr,speechlm2-only]==3.0.0",
     "pytest",
+    "argon2-cffi>=25.1.0",
+    "itsdangerous>=2.2.0",
 ]
 
 # nemo_automodel requires `torchao` unpinned; the latest (0.18.0) imports

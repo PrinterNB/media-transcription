@@ -17,6 +17,7 @@ from typing import Callable
 
 import httpx
 
+from .. import usage
 from ..config import settings
 from .outputs import _label
 
@@ -406,7 +407,9 @@ def _chat(url: str, model: str, messages: list[dict]) -> str | None:
                 url + "/api/chat", json=payload, timeout=httpx.Timeout(600.0, connect=10.0)
             )
             resp.raise_for_status()
-            return resp.json().get("message", {}).get("content", "")
+            data = resp.json()
+            usage.add(int(data.get("prompt_eval_count", 0)), int(data.get("eval_count", 0)))
+            return data.get("message", {}).get("content", "")
         except (httpx.HTTPError, ValueError, json.JSONDecodeError):
             if attempt == 2:
                 return None

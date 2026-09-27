@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as api from '../lib/api'
+import { ApiError } from '../lib/api'
 import type { Job, UploadOptions } from '../lib/types'
 
 export interface Health {
@@ -12,16 +13,25 @@ export interface Health {
 
 const isLive = (j: Job) => j.status === 'queued' || j.status === 'running'
 
-export function useJobs() {
+export function useJobs(onAuthLost?: () => void) {
   const [jobs, setJobs] = useState<Job[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [health, setHealth] = useState<Health | null>(null)
+
+  // Always call the latest callback without re-creating refresh each render.
+  const onAuthLostRef = useRef(onAuthLost)
+  onAuthLostRef.current = onAuthLost
 
   const refresh = useCallback(async () => {
     try {
       const list = await api.listJobs()
       setJobs(list)
-    } catch {
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 401) {
+        // Session expired (e.g. signed out in another tab) — hand back to the
+        // App to drop the session and show the login screen.
+        onAuthLostRef.current?.()
+      }
       /* backend not up yet; ignore */
     }
   }, [])
@@ -79,18 +89,31 @@ export function useJobs() {
   }, [])
 
   const clearHistory = useCallback(async () => {
-    const ok = window.confirm(
-      'Clear job history? This deletes all jobs plus their uploaded files and outputs.',
-    )
+    const ok = window.confirm('Delete all your jobs and their files?')
     if (!ok) return
     try {
-      await api.clearJobs()
+      await api.clearMyJobs()
       setSelectedId(null)
       await refresh()
     } catch (e) {
-      window.alert(`Could not clear history: ${e instanceof Error ? e.message : String(e)}`)
+      window.alert(`Could not delete your jobs: ${e instanceof Error ? e.message : String(e)}`)
     }
   }, [refresh])
 
-  return { jobs, selected, selectedId, select, submitJob, cancel, clearHistory, health }
+  const deleteJob = useCallback(
+    async (id: string) => {
+      const ok = window.confirm('Delete this job and its files?')
+      if (!ok) return
+      try {
+        await api.deleteJob(id)
+        setSelectedId(null)
+        await refresh()
+      } catch (e) {
+        window.alert(`Could not delete job: ${e instanceof Error ? e.message : String(e)}`)
+      }
+    },
+    [refresh],
+  )
+
+  return { jobs, selected, selectedId, select, submitJob, cancel, clearHistory, deleteJob, health }
 }

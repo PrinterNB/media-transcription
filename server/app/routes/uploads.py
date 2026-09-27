@@ -2,9 +2,10 @@
 from __future__ import annotations
 
 import httpx
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pathlib import Path
 
+from ..auth import require_user
 from ..config import settings
 from ..db import get_db
 from ..pipeline import audio, summarize
@@ -41,6 +42,7 @@ async def create_job(
     naming: str = Form("true"),
     ollama_model: str | None = Form(None),
     summary_template: str | None = Form(None),
+    user: dict = Depends(require_user),
 ):
     asr = (asr or "canary").strip()
     if asr not in ("canary", "whisper"):
@@ -67,6 +69,7 @@ async def create_job(
             "summary_template": summary_template,
         },
         pending_summary=summary_template,
+        owner=user["username"],
     )
     job_id = job["id"]
     job_dir = settings().uploads_dir / job_id

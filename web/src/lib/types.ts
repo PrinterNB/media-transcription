@@ -24,6 +24,7 @@ export type JobStatus = 'queued' | 'running' | 'done' | 'error' | 'cancelled'
 
 export interface Job {
   id: string
+  owner?: string
   source_name: string
   size_bytes: number
   status: JobStatus
@@ -59,3 +60,48 @@ export interface UploadOptions {
   ollama_model?: string
   summary_template?: string
 }
+
+export type UserStatus = 'active' | 'pending' | 'disabled'
+
+export interface User {
+  username: string
+  is_admin: boolean
+  status: UserStatus
+  created_at: string
+  last_login_at: string | null
+}
+
+export interface AdminUser {
+  id: number
+  username: string
+  is_admin: boolean
+  status: UserStatus
+  created_at: string
+  last_login_at: string | null
+  job_count: number
+  bytes: number
+  prompt_tokens: number
+  completion_tokens: number
+}
+
+export interface UsageUser {
+  username: string
+  is_admin: boolean
+  jobs: number
+  bytes: number
+  prompt_tokens: number
+  completion_tokens: number
+  duration_sec: number
+}
+
+export interface UsageSummary {
+  users: UsageUser[]
+  totals: Record<string, number>
+}
+
+export interface AdminSettings {
+  require_approval: boolean
+}
+
+// Main-view switch (there is no router: App swaps panes on this state).
+export type View = 'jobs' | 'admin'

@@ -28,6 +28,13 @@ def _load_dotenv(root: Path) -> None:
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
+def _bool_env(name: str, default: bool) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in ("1", "true", "yes", "on")
+
+
 @lru_cache(maxsize=1)
 def settings() -> "Settings":
     _load_dotenv(_PROJECT_ROOT)
@@ -62,6 +69,11 @@ def settings() -> "Settings":
         asr_default=os.environ.get("ASR_DEFAULT", "canary"),
         host=os.environ.get("HOST", "0.0.0.0"),
         port=int(os.environ.get("PORT", "8000")),
+        admin_username=os.environ.get("ADMIN_USERNAME", "admin"),
+        admin_password=os.environ.get("ADMIN_PASSWORD", "admin"),
+        require_approval=_bool_env("REQUIRE_APPROVAL", False),
+        # Blank = auto-generate once and persist in app_settings.
+        session_secret=os.environ.get("SESSION_SECRET", ""),
     )
 
 
@@ -92,3 +104,7 @@ class Settings:
     asr_default: str
     host: str
     port: int
+    admin_username: str
+    admin_password: str
+    require_approval: bool
+    session_secret: str

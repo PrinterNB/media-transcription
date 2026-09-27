@@ -157,26 +157,75 @@ and launches uvicorn. When it's up it prints the addresses:
 - this machine: `http://localhost:8000`
 - other devices on your LAN: the printed IP, e.g. `http://192.168.1.20:8000`
 
+## Users & admin
+
+Everything after the login screen is per-user. Every `/api` route requires a
+signed-in user (except `/api/health`, `/api/ollama/models`, and
+`/api/summary/templates`). Passwords are argon2-hashed; a session is a signed
+HttpOnly cookie (`SameSite=Lax`, 30 days).
+
+- **First boot** seeds the admin account from `.env`: `ADMIN_USERNAME`
+  (default `admin`) and `ADMIN_PASSWORD` (default `admin` — change it). `.env`
+  only fixes the password at *creation*; a password later changed in the admin
+  panel wins and survives restarts.
+- **Sign-in / sign-up** — the login screen is the entry point. "Add user"
+  creates an account (username 3–32 chars of `A-Za-z0-9._-`, password 8+
+  chars) and signs you straight in. By default sign-ups are active at once;
+  with approval required (Data tab, below), they start as *pending* and can't
+  log in until an admin approves them.
+- **Per-user ownership** — every job belongs to the user who created it, and
+  the main list shows only your own jobs (someone else's 404s on get/download/
+  stream). You can delete your own jobs — per-job delete button, or "Delete my
+  jobs" from the sidebar — but a job that's still running must be cancelled
+  first (409). Jobs from before auth existed were backfilled to the admin
+  account.
+- **Admin panel** — admins (only) see an "Admin panel" button in the top bar,
+  with three tabs:
+  - **Users** — every account (role, status, last login, job count, tokens);
+    promote/demote admin, approve pending / enable / disable, set or reset
+    passwords, delete a user (removes their jobs + files; you can't delete
+    yourself). The "Add user" form here bypasses the approval requirement —
+    it's direct provisioning.
+  - **Data** — the "Require approval for new sign-ups" toggle (persisted,
+    takes effect immediately); a table of **all** users' jobs with per-row
+    delete; "Delete all data" — the old wipe, now admin-only, and it 409s if
+    any job is still running.
+  - **Usage** — per-user and totals: job count, bytes uploaded, prompt +
+    completion tokens (captured from Ollama's `prompt_eval_count` /
+    `eval_count` on naming, summarization, and chat calls, stored per job),
+    and transcript duration.
+
+New `.env` vars (all in `.env.example`): `ADMIN_USERNAME=admin`,
+`ADMIN_PASSWORD=admin` (change me), `SESSION_SECRET=` (blank = auto-generated
+once and stored in the database), and `REQUIRE_APPROVAL=false` — if `true`,
+that's the *initial* value of the approval toggle; the admin panel toggle
+then persists its own value.
+
+Security posture: this is a LAN-trusted app — no rate limiting and plain-HTTP
+cookies (no `Secure` flag). Exposing it beyond the LAN? Put it behind HTTPS
+and set `Secure` cookies.
+
 ## Using it
 
-1. Upload a file (audio or video, any format with an audio track). If the
+1. Sign in (or create an account — see Users & admin).
+2. Upload a file (audio or video, any format with an audio track). If the
    browser can decode it, only the audio is uploaded; otherwise the whole file
    goes up and the server strips audio with ffmpeg.
-2. Pick the ASR backend:
+3. Pick the ASR backend:
    - **English (recommended)** — `nvidia/canary-qwen-2.5b`. Fast and accurate
      for English (and accents); no other languages.
    - **Multilingual** — Whisper large-v3, with an optional language hint
      (leave empty to auto-detect).
-3. Toggles and options, all on by default:
+4. Toggles and options, all on by default:
    - **Diarize** — separate speakers with pyannote.
    - **Name speakers** — Ollama pass that assigns real names where a speaker
      says their name; everyone else stays `Speaker N`.
    - **Ollama model** — which model does the naming pass (dropdown lists every
      model on your Ollama server). Leave it on `(default)` to use `OLLAMA_MODEL`
      from `.env`.
-4. Watch the job list — stages (extract → transcribe → diarize → name → write)
+5. Watch the job list — stages (extract → transcribe → diarize → name → write)
    and progress update live over SSE. Jobs can be cancelled between stages.
-5. When done: read the transcript in the UI (colored speaker chips, names with
+6. When done: read the transcript in the UI (colored speaker chips, names with
    evidence tooltips) and download **TXT / SRT / VTT / JSON** (SRT/VTT are
    merged, speaker-prefixed subtitle lines; JSON is the full canonical
    transcript).

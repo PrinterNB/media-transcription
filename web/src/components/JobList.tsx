@@ -39,7 +39,7 @@ export default function JobList({
         </button>
         <button
           onClick={onClear}
-          title="Clear job history and delete all inputs and outputs"
+          title="Delete my jobs — removes all of your jobs and their files"
           className="rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-400 hover:border-red-900 hover:text-red-300"
         >
           Clear
