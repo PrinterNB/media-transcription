@@ -94,3 +94,66 @@ def test_create_job_invalid_template_rejected(client):
     status = _upload(client, template="no_such_template")
     assert status == 400
     assert client.get("/api/jobs").json() == []
+
+
+def test_chat_unloads_ollama_after_answering(client, monkeypatch):
+    """POST /{id}/chat prepares for Ollama, answers, then unloads resident
+    models (the `llm_session` guard) — and still unloads when the answer
+    fails."""
+    from server.app.db import get_db
+    from server.app.pipeline import naming
+    from server.app.pipeline import summarize
+    from server.app.routes import jobs as jobs_route
+
+    # seed a finished job with a one-line transcript
+    job = get_db().create("a.wav", 12, {})
+    get_db().update(
+        job["id"], status="done", stage="done", progress=100,
+        speaker_map={},
+        segments=[{"start": 0, "end": 2, "text": "hi", "speaker": "SPEAKER_00"}],
+        finished=True,
+    )
+
+    prepared = []
+
+    class _M:
+        def prepare_for_ollama(self):
+            prepared.append(1)
+
+    monkeypatch.setattr(jobs_route, "get_manager", lambda: _M())
+    monkeypatch.setattr(summarize, "_chat", lambda url, model, messages: "sure, me")
+    unloads = []
+    monkeypatch.setattr(naming, "unload_all", lambda url=None: unloads.append(url))
+
+    r = client.post(f"/api/jobs/{job['id']}/chat", json={"message": "who spoke?"})
+    assert r.status_code == 200, r.text
+    assert r.json()["reply"] == "sure, me"
+    assert prepared == [1]  # ASR/diarizer freed BEFORE Ollama
+    assert unloads == [None]  # and resident models freed AFTER
+
+
+def test_chat_unloads_even_when_ollama_fails(client, monkeypatch):
+    from server.app.db import get_db
+    from server.app.pipeline import naming
+    from server.app.pipeline import summarize
+    from server.app.routes import jobs as jobs_route
+
+    job = get_db().create("a.wav", 12, {})
+    get_db().update(
+        job["id"], status="done", stage="done", progress=100,
+        speaker_map={},
+        segments=[{"start": 0, "end": 2, "text": "hi", "speaker": "SPEAKER_00"}],
+        finished=True,
+    )
+    class _M:
+        def prepare_for_ollama(self):
+            pass
+
+    monkeypatch.setattr(jobs_route, "get_manager", lambda: _M())
+    monkeypatch.setattr(summarize, "_chat", lambda url, model, messages: None)
+    unloads = []
+    monkeypatch.setattr(naming, "unload_all", lambda url=None: unloads.append(url))
+
+    r = client.post(f"/api/jobs/{job['id']}/chat", json={"message": "who spoke?"})
+    assert r.status_code == 502, r.text  # no output, but...
+    assert unloads == [None]  # ...the resident model was still unloaded

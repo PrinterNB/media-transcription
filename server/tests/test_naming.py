@@ -3,6 +3,8 @@ called through _chat, which we stub here)."""
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from server.app.models.asr_base import Segment  # noqa: E402
@@ -104,3 +106,28 @@ def test_unload_all_tolerates_unreachable_ollama(monkeypatch):
         raise naming.httpx.HTTPError("down")
     monkeypatch.setattr(naming.httpx, "get", boom)
     naming.unload_all(ollama_url="http://x")  # must not raise
+
+
+def test_llm_session_unloads_after_use(monkeypatch):
+    calls = []
+    monkeypatch.setattr(naming, "unload_all", lambda url=None: calls.append(url))
+    with naming.llm_session():
+        pass  # the LLM call itself
+    assert calls == [None]
+
+
+def test_llm_session_unloads_even_when_use_fails(monkeypatch):
+    calls = []
+    monkeypatch.setattr(naming, "unload_all", lambda url=None: calls.append(url))
+    with pytest.raises(RuntimeError):
+        with naming.llm_session():
+            raise RuntimeError("ollama blew up")
+    assert calls == [None]
+
+
+def test_llm_session_swallows_unload_failures(monkeypatch):
+    def boom(url=None):
+        raise RuntimeError("ollama gone")
+    monkeypatch.setattr(naming, "unload_all", boom)
+    with naming.llm_session():  # must not raise, even on error paths
+        pass

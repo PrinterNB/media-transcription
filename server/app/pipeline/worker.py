@@ -187,9 +187,10 @@ class JobWorker:
                 db.update(job_id, stage="naming", progress=85, message="Naming speakers…")
                 manager.prepare_for_ollama()  # free ASR + diarizer BEFORE Ollama
                 rep = stage_report("naming")
-                speaker_map = naming.infer_names(
-                    segments, progress_cb=rep, model=ollama_model
-                )
+                with naming.llm_session():  # frees resident Ollama models after
+                    speaker_map = naming.infer_names(
+                        segments, progress_cb=rep, model=ollama_model
+                    )
             elif do_naming and not do_diarize:
                 db.update(job_id, stage="naming", progress=95,
                           message="Naming skipped (diarization off)")
@@ -218,10 +219,11 @@ class JobWorker:
                     # VRAM, required when naming was skipped for this job.
                     manager.prepare_for_ollama()
                     try:
-                        text = summarize.run_template(
-                            {"segments": segments, "speaker_map": speaker_map, "options": opts},
-                            pending, model=ollama_model, progress_cb=rep,
-                        )
+                        with naming.llm_session():  # frees resident Ollama models after
+                            text = summarize.run_template(
+                                {"segments": segments, "speaker_map": speaker_map, "options": opts},
+                                pending, model=ollama_model, progress_cb=rep,
+                            )
                         if text:
                             stored = db.get(job_id) or {}
                             summaries = dict(stored.get("summaries") or {})

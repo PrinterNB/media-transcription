@@ -15,12 +15,16 @@ identity and later chunks are cheap (they mostly reconfirm).
 from __future__ import annotations
 
 import json
+import logging
 import re
+from contextlib import contextmanager
 from typing import Callable
 
 import httpx
 
 from ..config import settings
+
+log = logging.getLogger(__name__)
 
 ProgressCB = Callable[[float, str], None]
 
@@ -166,12 +170,33 @@ def infer_names(
     return speaker_map
 
 
+@contextmanager
+def llm_session():
+    """Run Ollama-backed work, then unload resident models on exit.
+
+    Wrap any operation that talks to Ollama (the naming pass, a summary, a
+    chat answer). `unload_all()` runs in the `finally` — success or error —
+    and any failure to unload is logged, never raised, so a flaky or missing
+    Ollama can never break the operation that just finished. The caller has
+    already called `manager.prepare_for_ollama()` before entering, keeping
+    the "prepare before, unload after" symmetry.
+    """
+    try:
+        yield
+    finally:
+        try:
+            unload_all()
+        except Exception:  # noqa: BLE001
+            log.warning("failed to unload resident Ollama models", exc_info=True)
+
+
 def unload_all(ollama_url: str | None = None) -> None:
     """Ask Ollama to unload every model currently resident in VRAM.
 
-    Called when a job starts so a model left over from a previous run (Ollama
-    keeps models warm by default) frees VRAM before ASR loads. Never raises —
-    a missing/unreachable Ollama just means there's nothing loaded by us.
+    Called when a job starts (so a model left over from a previous run frees
+    VRAM before ASR loads) and after every Ollama-backed operation finishes,
+    via `llm_session()`. Never raises — a missing/unreachable Ollama just
+    means there's nothing loaded by us.
     """
     s = settings()
     url = (ollama_url or s.ollama_url).rstrip("/")

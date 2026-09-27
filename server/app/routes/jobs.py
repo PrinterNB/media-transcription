@@ -10,7 +10,7 @@ from fastapi.responses import StreamingResponse
 from ..config import settings
 from ..db import get_db
 from ..models.manager import get_manager
-from ..pipeline import summarize
+from ..pipeline import naming, summarize
 from ..pipeline.worker import get_worker, TERMINAL
 
 router = APIRouter(prefix="/api")
@@ -130,7 +130,8 @@ def summarize_job(job_id: str, body: dict | None = None):
     model = (job.get("options") or {}).get("ollama_model") or None
     get_manager().prepare_for_ollama()  # free ASR + diarizer BEFORE Ollama
     try:
-        result = summarize.run_template(job, template, model)
+        with naming.llm_session():  # frees resident Ollama models after
+            result = summarize.run_template(job, template, model)
     except ValueError as e:
         raise HTTPException(400, str(e))
     if not (result or "").strip():
@@ -169,7 +170,8 @@ def chat_with_transcript(job_id: str, body: dict | None = None):
 
     model = (job.get("options") or {}).get("ollama_model") or None
     get_manager().prepare_for_ollama()  # free ASR + diarizer BEFORE Ollama
-    reply = summarize.answer(job, message, history, model)
+    with naming.llm_session():  # frees resident Ollama models after
+        reply = summarize.answer(job, message, history, model)
     if not (reply or "").strip():
         raise HTTPException(502, "the chat model returned no output (is Ollama running?)")
     return {"reply": reply}

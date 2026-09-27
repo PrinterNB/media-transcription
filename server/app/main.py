@@ -8,6 +8,7 @@ so the VRAM rule holds by construction.
 from __future__ import annotations
 
 import socket
+import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -16,6 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from .config import settings
+from .pipeline import naming
 from .pipeline.worker import get_worker
 from .routes import downloads, jobs, uploads
 
@@ -43,7 +45,21 @@ async def lifespan(app: FastAPI):
     print(f"   on the LAN   : http://{ip}:{s.port}")
     print("=" * 62)
     yield
-    # worker is a daemon; nothing to stop explicitly
+    # worker is a daemon; nothing to stop explicitly.
+    # Free any Ollama models still resident in VRAM — best-effort in a daemon
+    # thread, so a slow or dead Ollama can neither hang shutdown nor raise.
+    threading.Thread(
+        target=_unload_ollama_best_effort,
+        name="ollama-shutdown-unload",
+        daemon=True,
+    ).start()
+
+
+def _unload_ollama_best_effort() -> None:
+    try:
+        naming.unload_all()
+    except Exception:  # noqa: BLE001  (shutdown must never fail)
+        pass
 
 
 def create_app() -> FastAPI:
