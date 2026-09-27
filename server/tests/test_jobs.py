@@ -31,6 +31,12 @@ def client(tmp_path, monkeypatch):
 
     # isolate the job store: fresh DATA_DIR + fresh db singleton
     monkeypatch.setenv("DATA_DIR", str(tmp_path / "data"))
+    # Pin the seeded admin so the real .env (a user's live account) can't
+    # change who/what these tests log in as.
+    monkeypatch.setenv("ADMIN_USERNAME", "admin")
+    monkeypatch.setenv("ADMIN_PASSWORD", "admin")
+    monkeypatch.setenv("REQUIRE_APPROVAL", "false")
+    monkeypatch.delenv("SESSION_SECRET", raising=False)
     _settings.cache_clear()
     db_mod._jobs = None
 
