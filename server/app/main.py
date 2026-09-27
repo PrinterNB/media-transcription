@@ -8,10 +8,12 @@ so the VRAM rule holds by construction.
 from __future__ import annotations
 
 import socket
+import sys
 import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import qrcode
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -34,6 +36,22 @@ def _lan_ip() -> str:
         return "127.0.0.1"
 
 
+def _print_lan_qr(url: str) -> None:
+    # QR of the LAN URL so a phone can be scanned into the app. TTY-only and
+    # best-effort: piped stdout (tests, CI, logs) skips it, and a terminal
+    # that chokes on the block glyphs must never block startup. Plain
+    # characters (no ANSI codes) so it renders in any console font/theme.
+    try:
+        if not sys.stdout.isatty():
+            return
+        qr = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_M)
+        qr.add_data(url)
+        print("   scan this from your phone to open the app:")
+        qr.print_ascii()
+    except Exception:  # noqa: BLE001  (banner is cosmetic; startup must not fail)
+        pass
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Seed admin + settings + backfill job owners BEFORE the worker starts,
@@ -43,10 +61,12 @@ async def lifespan(app: FastAPI):
     worker.start()
     s = settings()
     ip = _lan_ip()
+    lan_url = f"http://{ip}:{s.port}"
     print("=" * 62)
     print(" media-transcription is running")
     print(f"   this machine : http://127.0.0.1:{s.port}")
-    print(f"   on the LAN   : http://{ip}:{s.port}")
+    print(f"   on the LAN   : {lan_url}")
+    _print_lan_qr(lan_url)
     print("=" * 62)
     yield
     # worker is a daemon; nothing to stop explicitly.

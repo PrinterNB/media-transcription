@@ -36,6 +36,9 @@ dependencies = [
     "pytest",
     "argon2-cffi>=25.1.0",
     "itsdangerous>=2.2.0",
+    # Terminal QR for the startup banner. Pinned <9: the 7->8 line already
+    # renamed print_in_terminal -> print_ascii/print_tty.
+    "qrcode>=8.2,<9",
 ]
 
 # nemo_automodel requires `torchao` unpinned; the latest (0.18.0) imports
