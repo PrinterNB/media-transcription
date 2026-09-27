@@ -150,6 +150,13 @@ skips the corresponding download.
 scripts\run.ps1
 ```
 
+(If Windows says the script *isn't digitally signed* and can't be run —
+common with a freshly downloaded repo — run `run.cmd` instead. It invokes the
+same script with the execution policy bypassed for that one run and changes
+no system settings. To make `scripts\run.ps1` work directly, run
+`powershell -Command Set-ExecutionPolicy RemoteSigned -Scope CurrentUser`
+once.)
+
 The script prepends the CUDA 12.9 runtime to `PATH` (Whisper's ctranslate2
 backend needs those DLLs), rebuilds `web/dist` if it's older than `web/src`,
 and launches uvicorn. When it's up it prints the addresses:
