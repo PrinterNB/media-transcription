@@ -11,6 +11,7 @@ import {
   type SummaryTemplate,
 } from '../lib/api'
 import type { Job } from '../lib/types'
+import Markdown from './Markdown'
 
 export default function SummaryPanel({ job }: { job: Job }) {
   const [templates, setTemplates] = useState<SummaryTemplate[]>([])
@@ -128,7 +129,7 @@ export default function SummaryPanel({ job }: { job: Job }) {
                 {labelFor(id)}
               </summary>
               <div className="border-t border-zinc-800 px-3 py-2">
-                <p className="whitespace-pre-wrap text-sm leading-6 text-zinc-300">{text}</p>
+                <Markdown content={text} />
               </div>
             </details>
           ))}
@@ -139,19 +140,21 @@ export default function SummaryPanel({ job }: { job: Job }) {
         <div className="mt-3">
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">Chat with transcript</p>
           <div className="max-h-64 space-y-2 overflow-y-auto">
-            {messages.map((m, i) => (
-              <div key={i} className={m.role === 'user' ? 'text-right' : 'text-left'}>
-                <span
-                  className={
-                    m.role === 'user'
-                      ? 'inline-block rounded-lg bg-emerald-950/50 px-3 py-1.5 text-sm font-semibold text-emerald-100'
-                      : 'inline-block rounded-lg bg-zinc-800/70 px-3 py-1.5 text-sm text-zinc-200'
-                  }
-                >
-                  {m.content}
-                </span>
-              </div>
-            ))}
+            {messages.map((m, i) =>
+              m.role === 'user' ? (
+                <div key={i} className="text-right">
+                  <span className="inline-block rounded-lg bg-emerald-950/50 px-3 py-1.5 text-sm font-semibold text-emerald-100">
+                    {m.content}
+                  </span>
+                </div>
+              ) : (
+                <div key={i} className="text-left">
+                  <div className="w-full rounded-lg bg-zinc-800/70 px-3 py-1.5">
+                    <Markdown content={m.content} />
+                  </div>
+                </div>
+              )
+            )}
             {thinking && <div className="text-left text-xs italic text-zinc-500">Thinking…</div>}
             <div ref={listEndRef} />
           </div>
