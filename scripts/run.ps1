@@ -3,11 +3,14 @@
 #   - prepends the CUDA 12.9 runtime bin to PATH (faster-whisper's ctranslate2
 #     links against its DLLs and needs them findable at import time)
 #   - sets PYTHONUTF8=1 (Windows UTF-8: console + Python text I/O)
+#   - creates the .venv with `uv sync` on first run, and keeps it in sync with
+#     uv.lock afterwards (fast no-op when already current)
+#   - creates .env from .env.example on first run
 #   - builds web/dist if missing or older than anything under web/src
 #   - launches uvicorn (no reload) serving API + web UI on 0.0.0.0:8000
-#     (main.py prints the LAN IP at boot)
+#     (main.py prints the LAN IP + a QR code at boot)
 #
-# Run from anywhere:  scripts\run.ps1
+# Run from anywhere:  scripts\run.ps1   (or just double-click run.cmd)
 
 $ErrorActionPreference = "Stop"
 
@@ -26,20 +29,52 @@ $env:PYTHONUTF8 = "1"
 
 $Root = Split-Path -Parent $PSScriptRoot
 $VenvPy = Join-Path $Root ".venv\Scripts\python.exe"
-if (-not (Test-Path $VenvPy)) {
-    Write-Error @"
-No virtualenv at '$VenvPy' - first-time setup, run these from the project
-root, then run this launcher again:
-
-  uv sync            # install Python deps (install uv first: https://docs.astral.sh/uv/)
-  cd web; npm install; cd ..   # install web deps (needed to build web/dist)
-  Copy-Item .env.example .env  # then edit .env (at minimum HF_TOKEN)
-"@
-    exit 1
-}
 
 Push-Location $Root
 try {
+    # --- python venv: create on first run, refresh otherwise -----------------
+    $haveUv = $null -ne (Get-Command uv -ErrorAction SilentlyContinue)
+    if (-not (Test-Path $VenvPy)) {
+        if (-not $haveUv) {
+            Write-Error @"
+No virtualenv at '$VenvPy' and 'uv' is not on PATH, so the launcher cannot
+create one. First-time setup, run these from the project root, then run this
+launcher again:
+
+  powershell -c "irm https://astral.sh/uv/install.ps1 | iex"   # install uv
+  uv sync                     # install Python dependencies
+  Copy-Item .env.example .env # then edit .env (at minimum HF_TOKEN)
+"@
+            exit 1
+        }
+        Write-Host "No .venv - running 'uv sync' (first-time install, downloads the Python dependencies)..."
+        uv sync
+        if ($LASTEXITCODE -ne 0) {
+            Write-Error "uv sync failed (exit code $LASTEXITCODE) - see output above."
+            exit 1
+        }
+    } elseif ($haveUv) {
+        # Fast no-op when the venv already matches uv.lock; repairs a venv that
+        # went stale (e.g. the repo was updated since the venv was created,
+        # which is exactly how a stale .venv ended up breaking `run.cmd`).
+        uv sync
+        if ($LASTEXITCODE -ne 0) {
+            Write-Warning "uv sync failed (exit code $LASTEXITCODE) - continuing with the existing .venv (it may be stale)."
+        }
+    } else {
+        Write-Warning "uv not on PATH - skipping 'uv sync' (the .venv may be stale; run 'uv sync' to refresh it)."
+    }
+
+    # --- .env: start from .env.example on first run ---------------------------
+    if (-not (Test-Path ".env")) {
+        if (Test-Path ".env.example") {
+            Copy-Item ".env.example" ".env"
+            Write-Host "Created .env from .env.example - the default login is admin/admin; add your HF_TOKEN before diarization will work."
+        } else {
+            Write-Warning "No .env (and no .env.example) - running with built-in defaults."
+        }
+    }
+
     # --- install web deps if this is a fresh checkout ------------------------
     if (-not (Test-Path "web\node_modules")) {
         Write-Host "Installing web dependencies (npm install)..."
@@ -79,8 +114,14 @@ try {
     }
 
     # --- launch (no --reload in prod) ---------------------------------------
+    # uvicorn is started through its console entry point (uvicorn.main:main)
+    # via the venv's python, because the two "normal" ways are both flaky:
+    # `python -m uvicorn` needs a __main__.py that not every uvicorn version
+    # ships, and the venv's uvicorn.exe launcher is a uv "trampoline" that
+    # fails ("uv trampoline failed to canonicalize script path") on some
+    # Windows setups - see astral-sh/uv#17341.
     Write-Host "Starting media-transcription on 0.0.0.0:8000 (Ctrl+C to stop)..."
-    & $VenvPy -m uvicorn server.app.main:app --host 0.0.0.0 --port 8000
+    & $VenvPy -c "from uvicorn.main import main; main()" server.app.main:app --host 0.0.0.0 --port 8000
     if ($LASTEXITCODE -ne 0) {
         Write-Error "uvicorn exited with code $LASTEXITCODE"
         exit $LASTEXITCODE

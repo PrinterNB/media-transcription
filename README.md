@@ -151,18 +151,22 @@ scripts\run.ps1
 ```
 
 (If Windows says the script *isn't digitally signed* and can't be run —
-common with a freshly downloaded repo — run `run.cmd` instead. It invokes the
-same script with the execution policy bypassed for that one run and
-changes no system settings. If the launcher stops before the server starts,
-the window pauses so you can read the error — the first run of a fresh
-download prints the setup commands you still owe it. To make
-`scripts\run.ps1` work directly, run
-`powershell -Command Set-ExecutionPolicy RemoteSigned -Scope CurrentUser`
-once.)
+common with a freshly downloaded repo, because Windows marks files extracted
+from a download zip as "from the Internet" — double-click `run.cmd` instead.
+It invokes the same script with the execution policy bypassed for that one
+run and changes no system settings (and `Set-ExecutionPolicy` alone won't
+help while the unzipped file carries that mark — right-click it → Properties
+→ **Unblock** would also fix `scripts\run.ps1` directly). If the launcher
+stops before the server starts, the window pauses so you can read the error.
+First run of a fresh download does the setup itself: `uv sync` for the
+Python venv and `npm install` for the web build, and it creates `.env` from
+`.env.example` (default login `admin`/`admin` — edit `.env` to add at least
+`HF_TOKEN`).)
 
 The script prepends the CUDA 12.9 runtime to `PATH` (Whisper's ctranslate2
-backend needs those DLLs), rebuilds `web/dist` if it's older than `web/src`,
-and launches uvicorn. When it's up it prints the addresses:
+backend needs those DLLs), refreshes the `.venv` against `uv.lock` (a fast
+no-op when already current), rebuilds `web/dist` if it's older than
+`web/src`, and launches uvicorn. When it's up it prints the addresses:
 
 - this machine: `http://localhost:8000`
 - other devices on your LAN: the printed IP, e.g. `http://192.168.1.20:8000`
@@ -283,8 +287,8 @@ non-synced drive) before it starts holding gigabytes of uploads.**
 Two terminals:
 
 ```powershell
-# API with hot reload
-.venv\Scripts\python -m uvicorn server.app.main:app --reload --port 8000
+# API with hot reload (same launch form scripts\run.ps1 uses)
+.venv\Scripts\python -c "from uvicorn.main import main; main()" server.app.main:app --reload --port 8000
 
 # web frontend with HMR (Vite dev server on :5173)
 cd web
