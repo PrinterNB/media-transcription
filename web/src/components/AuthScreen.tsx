@@ -2,7 +2,7 @@ import { useState } from 'react'
 import * as api from '../lib/api'
 
 const inputCls =
-  'w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-emerald-600'
+  'w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-base text-zinc-100 outline-none focus:border-emerald-600 sm:text-sm'
 
 export default function AuthScreen({ onLoggedIn }: { onLoggedIn: () => void }) {
   const [mode, setMode] = useState<'login' | 'signup'>('login')
@@ -52,8 +52,8 @@ export default function AuthScreen({ onLoggedIn }: { onLoggedIn: () => void }) {
   }
 
   return (
-    <div className="flex h-full items-center justify-center p-6">
-      <div className="w-full max-w-sm rounded-xl border border-zinc-800 bg-zinc-900/40 p-6">
+    <div className="flex h-full items-center justify-center overflow-y-auto p-4 sm:p-6">
+      <div className="w-full max-w-sm rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 sm:p-6">
         <h1 className="text-lg font-bold text-zinc-100">Transcription</h1>
 
         <div className="mt-4 space-y-3">

@@ -106,7 +106,8 @@ export default function AdminData() {
       )}
 
       <div className="overflow-x-auto rounded-xl border border-zinc-800">
-        <table className="w-full text-left text-sm">
+        {/* min-w-max: keep the table's natural width on phones (scrolls), w-full on desktop */}
+        <table className="w-full min-w-max text-left text-sm">
           <thead>
             <tr className="border-b border-zinc-800 text-xs uppercase tracking-wide text-zinc-500">
               <th className="px-3 py-2 font-medium">Job</th>
@@ -148,7 +149,7 @@ export default function AdminData() {
         </table>
       </div>
 
-      <div className="flex items-center justify-between rounded-xl border border-red-900/60 bg-red-950/20 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-900/60 bg-red-950/20 p-4">
         <div>
           <p className="text-sm font-medium text-red-300">Delete all data</p>
           <p className="mt-0.5 text-xs text-zinc-500">

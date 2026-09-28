@@ -13,13 +13,14 @@ export default function TopBar({
   onSignOut: () => void
 }) {
   return (
-    <header className="flex shrink-0 items-center justify-between border-b border-zinc-800 px-4 py-3">
+    <header className="flex shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-zinc-800 px-4 py-2 sm:py-3">
       <h1 className="text-lg font-bold text-zinc-100">Transcription</h1>
-      <div className="flex items-center gap-2">
+      {/* Wraps to a second line below md so every control keeps a real tap target */}
+      <div className="flex flex-wrap items-center gap-2">
         {user.is_admin && (
           <button
             onClick={() => setView(view === 'admin' ? 'jobs' : 'admin')}
-            className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition ${
+            className={`inline-flex min-h-10 items-center justify-center rounded-lg border px-3 py-1.5 text-xs font-medium transition sm:min-h-0 ${
               view === 'admin'
                 ? 'border-emerald-700 bg-emerald-950/40 text-emerald-300'
                 : 'border-zinc-800 bg-zinc-900 text-zinc-300 hover:border-zinc-700'
@@ -34,7 +35,7 @@ export default function TopBar({
         </span>
         <button
           onClick={onSignOut}
-          className="rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs font-medium text-zinc-300 hover:border-zinc-700"
+          className="inline-flex min-h-10 items-center justify-center rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs font-medium text-zinc-300 hover:border-zinc-700 sm:min-h-0"
         >
           Sign out
         </button>

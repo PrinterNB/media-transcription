@@ -96,7 +96,7 @@ export default function SummaryPanel({ job }: { job: Job }) {
 
   return (
     <div className="border-b border-zinc-800 px-4 py-3">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <label className="text-xs font-semibold uppercase tracking-wide text-zinc-500" htmlFor="summary-template">
           Summary
         </label>
@@ -105,7 +105,7 @@ export default function SummaryPanel({ job }: { job: Job }) {
           value={selected}
           onChange={(e) => pick(e.target.value)}
           disabled={busy}
-          className="rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-100 outline-none focus:border-emerald-600"
+          className="min-w-48 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-base text-zinc-100 outline-none focus:border-emerald-600 sm:text-sm"
         >
           <option value="">Choose a template…</option>
           {templates.map((t) => (
@@ -169,7 +169,7 @@ export default function SummaryPanel({ job }: { job: Job }) {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Ask a question about this transcript…"
-              className="flex-1 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-emerald-600"
+              className="min-w-0 flex-1 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-base text-zinc-100 outline-none focus:border-emerald-600 sm:text-sm"
             />
             <button
               type="submit"

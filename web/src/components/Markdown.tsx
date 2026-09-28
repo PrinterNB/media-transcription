@@ -37,9 +37,11 @@ const components: Components = {
   ),
   hr: () => <hr className="border-zinc-800" />,
   table: ({ children }) => (
-    <table className="w-full border-collapse text-sm text-zinc-300">
-      <tbody>{children}</tbody>
-    </table>
+    <div className="max-w-full overflow-x-auto">
+      <table className="w-full border-collapse text-sm text-zinc-300">
+        <tbody>{children}</tbody>
+      </table>
+    </div>
   ),
   th: ({ children }) => <th className="border border-zinc-700 px-2 py-1 text-left font-semibold text-zinc-100">{children}</th>,
   td: ({ children }) => <td className="border border-zinc-700 px-2 py-1">{children}</td>,

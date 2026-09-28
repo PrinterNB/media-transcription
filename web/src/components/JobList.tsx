@@ -30,17 +30,17 @@ export default function JobList({
 }) {
   return (
     <div className="flex h-full flex-col">
-      <div className="mb-3 flex gap-2">
+      <div className="mb-3 flex flex-wrap gap-2">
         <button
           onClick={onNew}
-          className="flex-1 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm font-medium text-zinc-200 hover:border-zinc-700"
+          className="min-h-10 flex-1 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm font-medium text-zinc-200 hover:border-zinc-700"
         >
           + New transcription
         </button>
         <button
           onClick={onClear}
           title="Delete my jobs — removes all of your jobs and their files"
-          className="rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-400 hover:border-red-900 hover:text-red-300"
+          className="min-h-10 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-400 hover:border-red-900 hover:text-red-300"
         >
           Clear
         </button>
@@ -61,14 +61,14 @@ export default function JobList({
             }`}
           >
             <div className="flex items-center justify-between gap-2">
-              <span className="truncate text-sm font-medium text-zinc-100">
+              <span className="min-w-0 truncate text-sm font-medium text-zinc-100">
                 {j.source_name}
               </span>
               <span className={`h-2 w-2 shrink-0 rounded-full ${statusColor(j.status)}`} />
             </div>
-            <div className="mt-1 flex items-center justify-between text-xs text-zinc-500">
-              <span>{j.stage}</span>
-              <span>
+            <div className="mt-1 flex items-center justify-between gap-2 text-xs text-zinc-500">
+              <span className="min-w-0 truncate">{j.stage}</span>
+              <span className="shrink-0">
                 {new Date(j.created_at + (j.created_at.endsWith('Z') ? 'Z' : '')).toLocaleString()}
               </span>
             </div>

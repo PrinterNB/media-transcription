@@ -52,7 +52,7 @@ export default function TranscriptView({ job }: { job: Job }) {
             {showSpeaker && seg.speaker ? (
               <span
                 title={evidence || undefined}
-                className="shrink-0 cursor-default select-none self-start rounded-full px-2 py-0.5 text-xs font-semibold"
+                className="max-w-40 shrink-0 cursor-default select-none self-start truncate rounded-full px-2 py-0.5 text-xs font-semibold"
                 style={{
                   backgroundColor: `hsl(${hue} 40% 18%)`,
                   color: `hsl(${hue} 80% 72%)`,

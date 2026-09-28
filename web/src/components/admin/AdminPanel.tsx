@@ -16,7 +16,7 @@ export default function AdminPanel({ me }: { me: User }) {
   const [tab, setTab] = useState<TabId>('users')
   return (
     <div className="flex h-full flex-col">
-      <div className="flex shrink-0 gap-1 border-b border-zinc-800 px-4 pt-1">
+      <div className="flex shrink-0 flex-wrap gap-1 border-b border-zinc-800 px-4 pt-1">
         {TABS.map((t) => (
           <button
             key={t.id}

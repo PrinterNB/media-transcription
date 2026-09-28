@@ -4,7 +4,7 @@ import type { AdminUser } from '../../lib/types'
 import { errMsg, fmtDate, fmtNum } from './format'
 
 const inputCls =
-  'rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-100 outline-none focus:border-emerald-600'
+  'rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-base text-zinc-100 outline-none focus:border-emerald-600 sm:text-sm'
 
 const btn =
   'rounded-lg border border-zinc-800 bg-zinc-900 px-2.5 py-1 text-xs text-zinc-300 hover:border-zinc-700'
@@ -140,7 +140,8 @@ export default function AdminUsers({ me }: { me: string }) {
       )}
 
       <div className="overflow-x-auto rounded-xl border border-zinc-800">
-        <table className="w-full text-left text-sm">
+        {/* min-w-max: keep the table's natural width on phones (scrolls), w-full on desktop */}
+        <table className="w-full min-w-max text-left text-sm">
           <thead>
             <tr className="border-b border-zinc-800 text-xs uppercase tracking-wide text-zinc-500">
               <th className="px-3 py-2 font-medium">User</th>

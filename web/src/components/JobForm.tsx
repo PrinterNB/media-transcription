@@ -89,7 +89,7 @@ export default function JobForm({
         <select
           value={value.asr}
           onChange={(e) => set({ asr: e.target.value as 'canary' | 'whisper' })}
-          className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-emerald-600"
+          className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-base text-zinc-100 outline-none focus:border-emerald-600 sm:text-sm"
         >
           <option value="canary">English (recommended whenever possible)</option>
           <option value="whisper">Not only English (only when necessary)</option>
@@ -103,7 +103,7 @@ export default function JobForm({
             value={value.language_hint}
             onChange={(e) => set({ language_hint: e.target.value })}
             placeholder="e.g. Spanish, Japanese, en"
-            className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-emerald-600"
+            className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-base text-zinc-100 outline-none focus:border-emerald-600 sm:text-sm"
           />
         </Field>
       )}
@@ -125,7 +125,7 @@ export default function JobForm({
           <select
             value={value.ollama_model}
             onChange={(e) => set({ ollama_model: e.target.value })}
-            className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-emerald-600"
+            className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-base text-zinc-100 outline-none focus:border-emerald-600 sm:text-sm"
           >
             {models === null ? (
               <option value="">(default)</option>
@@ -147,7 +147,7 @@ export default function JobForm({
           <select
             value={value.summary_template}
             onChange={(e) => set({ summary_template: e.target.value })}
-            className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-emerald-600"
+            className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-base text-zinc-100 outline-none focus:border-emerald-600 sm:text-sm"
           >
             <option value="">None (ask after it's done)</option>
             {templates.map((t) => (

@@ -104,7 +104,7 @@ export default function UploadPanel({ onSubmit }: Props) {
         <JobForm value={form} onChange={setForm} />
       </div>
 
-      <div className="mt-auto flex items-center gap-3">
+      <div className="mt-auto flex flex-wrap items-center gap-3">
         <button
           type="button"
           disabled={!file || busy}
