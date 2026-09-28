@@ -279,6 +279,15 @@ non-synced drive) before it starts holding gigabytes of uploads.**
 - **Ollama unreachable** — naming degrades gracefully: the job completes with
   `Speaker N` labels instead of real names. Start Ollama (or fix `OLLAMA_URL`
   in `.env`) and re-run if you want names.
+- **`uv sync` fails: "The cloud operation cannot be performed on a file with
+  incompatible hardlinks"** — happens when the repo sits in a OneDrive /
+  files-on-demand folder (like a download left unzipped in `Downloads`):
+  `uv`'s hardlinked installs break, which can also leave a `.venv` only
+  half-installed (symptom: weird import errors on start, e.g. `module 'click'
+  has no attribute ...`). `scripts\run.ps1` installs with `--link-mode=copy`
+  and rebuilds the `.venv` once automatically to cover this; if it still
+  fails, delete the `.venv` folder and run the launcher again. (Best long-term
+  home for the project and its models: a plain, non-synced drive.)
 - **Port 8000 in use** — find the other listener (`Get-NetTCPConnection
   -LocalPort 8000`) and stop it, or change the `--port` in `scripts\run.ps1`.
 

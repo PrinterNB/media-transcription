@@ -33,10 +33,12 @@ $VenvPy = Join-Path $Root ".venv\Scripts\python.exe"
 Push-Location $Root
 try {
     # --- python venv: create on first run, refresh otherwise -----------------
+    # A .venv is always regenerable from uv.lock, so this section is free to
+    # rebuild one that is missing or half-installed.
     $haveUv = $null -ne (Get-Command uv -ErrorAction SilentlyContinue)
-    if (-not (Test-Path $VenvPy)) {
-        if (-not $haveUv) {
-            Write-Error @"
+    $VenvDir = Join-Path $Root ".venv"
+    if (-not $haveUv -and -not (Test-Path $VenvPy)) {
+        Write-Error @"
 No virtualenv at '$VenvPy' and 'uv' is not on PATH, so the launcher cannot
 create one. First-time setup, run these from the project root, then run this
 launcher again:
@@ -45,21 +47,32 @@ launcher again:
   uv sync                     # install Python dependencies
   Copy-Item .env.example .env # then edit .env (at minimum HF_TOKEN)
 "@
-            exit 1
-        }
-        Write-Host "No .venv - running 'uv sync' (first-time install, downloads the Python dependencies)..."
+        exit 1
+    }
+
+    if ($haveUv) {
+        # uv normally hardlinks the installed files into the venv, but
+        # hardlinks fail with "The cloud operation cannot be performed on a
+        # file with incompatible hardlinks" when the repo sits in a
+        # OneDrive/cloud-managed folder (e.g. an unzipped download left in
+        # Downloads) - and a failed hardlink leaves packages only
+        # half-installed. Copy instead: only the first install is slower.
+        $env:UV_LINK_MODE = "copy"
+
+        # Fast no-op when the venv already matches uv.lock.
         uv sync
-        if ($LASTEXITCODE -ne 0) {
-            Write-Error "uv sync failed (exit code $LASTEXITCODE) - see output above."
-            exit 1
+        if ($LASTEXITCODE -ne 0 -and (Test-Path $VenvDir)) {
+            Write-Warning "uv sync failed (exit code $LASTEXITCODE) - the .venv may be half-installed. Deleting it and retrying once..."
+            Remove-Item $VenvDir -Recurse -Force -ErrorAction SilentlyContinue
+            uv sync
         }
-    } elseif ($haveUv) {
-        # Fast no-op when the venv already matches uv.lock; repairs a venv that
-        # went stale (e.g. the repo was updated since the venv was created,
-        # which is exactly how a stale .venv ended up breaking `run.cmd`).
-        uv sync
         if ($LASTEXITCODE -ne 0) {
-            Write-Warning "uv sync failed (exit code $LASTEXITCODE) - continuing with the existing .venv (it may be stale)."
+            Write-Error @"
+uv sync failed (exit code $LASTEXITCODE) - see output above. The app cannot
+start without its Python dependencies. If it keeps failing, delete the .venv
+folder and run this launcher again; otherwise report the error above.
+"@
+            exit 1
         }
     } else {
         Write-Warning "uv not on PATH - skipping 'uv sync' (the .venv may be stale; run 'uv sync' to refresh it)."
