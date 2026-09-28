@@ -27,12 +27,33 @@ $env:PYTHONUTF8 = "1"
 $Root = Split-Path -Parent $PSScriptRoot
 $VenvPy = Join-Path $Root ".venv\Scripts\python.exe"
 if (-not (Test-Path $VenvPy)) {
-    Write-Error "No virtualenv at '$VenvPy'. Run 'uv sync' from the project root first."
+    Write-Error @"
+No virtualenv at '$VenvPy' - first-time setup, run these from the project
+root, then run this launcher again:
+
+  uv sync            # install Python deps (install uv first: https://docs.astral.sh/uv/)
+  cd web; npm install; cd ..   # install web deps (needed to build web/dist)
+  Copy-Item .env.example .env  # then edit .env (at minimum HF_TOKEN)
+"@
     exit 1
 }
 
 Push-Location $Root
 try {
+    # --- install web deps if this is a fresh checkout ------------------------
+    if (-not (Test-Path "web\node_modules")) {
+        Write-Host "Installing web dependencies (npm install)..."
+        Push-Location "web"
+        try {
+            npm.cmd install
+            if ($LASTEXITCODE -ne 0) {
+                throw "npm install failed (exit code $LASTEXITCODE)"
+            }
+        } finally {
+            Pop-Location
+        }
+    }
+
     # --- build the web frontend if stale -------------------------------------
     $needBuild = $true
     if (Test-Path "web\dist") {

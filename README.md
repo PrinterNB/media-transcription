@@ -152,8 +152,11 @@ scripts\run.ps1
 
 (If Windows says the script *isn't digitally signed* and can't be run —
 common with a freshly downloaded repo — run `run.cmd` instead. It invokes the
-same script with the execution policy bypassed for that one run and changes
-no system settings. To make `scripts\run.ps1` work directly, run
+same script with the execution policy bypassed for that one run and
+changes no system settings. If the launcher stops before the server starts,
+the window pauses so you can read the error — the first run of a fresh
+download prints the setup commands you still owe it. To make
+`scripts\run.ps1` work directly, run
 `powershell -Command Set-ExecutionPolicy RemoteSigned -Scope CurrentUser`
 once.)
 
