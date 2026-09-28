@@ -155,8 +155,8 @@ common with a freshly downloaded repo, because Windows marks files extracted
 from a download zip as "from the Internet" — double-click `run.cmd` instead.
 It invokes the same script with the execution policy bypassed for that one
 run and changes no system settings (and `Set-ExecutionPolicy` alone won't
-help while the unzipped file carries that mark — right-click it → Properties
-→ **Unblock** would also fix `scripts\run.ps1` directly). If the launcher
+help while the unzipped file carries that mark — right-click either `scripts\run.ps1` or `run.cmd` → Properties
+→ **Unblock** would also fix whichever one you change the setting for). If the launcher
 stops before the server starts, the window pauses so you can read the error.
 First run of a fresh download does the setup itself: `uv sync` for the
 Python venv and `npm install` for the web build, and it creates `.env` from
