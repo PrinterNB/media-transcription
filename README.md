@@ -24,12 +24,14 @@ MPS backend and on `cpu` otherwise — the device is resolved once at load,
 there is no retry at run time. Whisper is CPU-only either way: the
 ctranslate2 engine it runs on has no MPS device.
 
-| Model | Resident memory | Loaded when |
-|---|---|---|
-| Canary qwen-2.5b (fp32) | ~10 GB | transcribing (exclusive slot) |
-| Whisper large-v3 (int8, CPU) | ~1.6 GB | transcribing (exclusive slot) |
-| pyannote speaker-diarization-3.1 | ~1 GB | diarizing (kept resident) |
-| Ollama naming model (e.g. a 27B GGUF) | ~13.7 GB | naming — never overlaps ASR/diarize |
+| Model | Device | Resident memory | Loaded when |
+|---|---|---|---|
+| Canary qwen-2.5b (fp32) | Apple GPU (`mps`), else CPU | ~10 GB | transcribing (exclusive slot) |
+| Whisper large-v3 (int8) | **CPU only** — ctranslate2 has no MPS device | ~1.6 GB | transcribing (exclusive slot) |
+| pyannote speaker-diarization-3.1 (fp32) | Apple GPU (`mps`), else CPU | ~1 GB | diarizing (kept resident) |
+| Ollama naming model (e.g. a 27B GGUF) | Apple GPU (Ollama's own Metal runtime) | ~13.7 GB | naming — never overlaps ASR/diarize |
+
+So three of the four run on the Apple GPU (Canary, pyannote, and naming via Ollama — which decides its own device and never goes through torch), and one never does: **Whisper is always CPU**, because faster-whisper's ctranslate2 engine accepts only its cpu and NVIDIA-GPU devices. Audio normalization (ffmpeg) is CPU work too. Choosing an ASR backend is a per-job trade: Canary uses the GPU but is English-first, Whisper covers every language at CPU speed.
 
 ## Prerequisites
 
