@@ -1,5 +1,9 @@
 # media-transcription
 
+**This branch is the Windows build.** The macOS port (Apple M-series, torch on
+`mps` falling back to `cpu`) lives on the [`macos-port`](https://github.com/PrinterNB/media-transcription/tree/macos-port)
+branch — launch it there with `./scripts/run.sh`, not `scripts\run.ps1`.
+
 A local-network transcription service: any device on the LAN opens a web UI,
 uploads audio or video, and gets back a speaker-labeled, named transcript. The
 browser extracts the audio track first (a 5 GB video uploads as ~100 MB of
