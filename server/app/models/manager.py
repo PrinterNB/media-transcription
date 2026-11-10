@@ -1,8 +1,10 @@
-"""Model manager — the VRAM heart.
+"""Model manager — the memory heart.
 
 Hard rule (from the user): the LLM (Ollama) must never run at the same time as
-transcription or diarization. On 16 GB we can't hold canary (~6 GB) or whisper
-(~3.1 GB) AND a 27B Ollama model (~13.7 GB) at once. So:
+transcription or diarization. Every model here shares ONE pool: this branch's
+floor is 32 GB of unified memory (see the README hardware note), and even
+that can't hold canary (~10 GB — fp32 on MPS/CPU now, see asr_canary) or
+whisper (~1.6 GB, int8 on CPU) AND a 27B Ollama model (~13.7 GB) at once. So:
 
   * Exactly ONE ASR model is resident at a time (`_asr_slot`). Requesting a
     different backend unloads the current one first.
@@ -25,6 +27,7 @@ from .asr_base import ProgressCB, Segment
 from .asr_canary import CanaryTranscriber
 from .asr_whisper import WhisperTranscriber
 from .diarize import Diarizer, DiarizationTrack, DiarizationError
+from . import free_torch_cache  # device-aware allocator free (models/__init__)
 
 log = logging.getLogger(__name__)
 
@@ -42,7 +45,7 @@ class ModelManager:
         """Return a loaded Transcriber for `name` ('canary'|'whisper').
 
         If a different backend is resident, it is unloaded first so the two
-        never coexist in VRAM.
+        never coexist in memory.
         """
         backend = self._canary if name == "canary" else self._whisper
         if self._active_asr is backend:
@@ -62,12 +65,10 @@ class ModelManager:
 
     def _free(self) -> None:
         gc.collect()
-        try:
-            import torch
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-        except Exception:  # noqa: BLE001
-            pass
+        # Device-aware allocator free (models/__init__): empties the MPS
+        # allocator only when MPS is feature-detected available, no-ops on
+        # CPU — the old inline guard probed the deleted NVIDIA-GPU path.
+        free_torch_cache()
 
     def transcribe(self, backend: str, wav_path: str, progress_cb: ProgressCB | None,
                    language: str | None = None) -> tuple[list[Segment], str | None]:
@@ -94,7 +95,7 @@ class ModelManager:
 
     # ---- the Ollama boundary ----
     def prepare_for_ollama(self) -> None:
-        """Free every model we own before calling Ollama (the hard VRAM rule)."""
+        """Free every model we own before calling Ollama (the hard memory rule)."""
         self._unload_asr()
         if self._diarizer.is_loaded():
             self._diarizer.unload()

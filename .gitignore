@@ -7,7 +7,7 @@ __pycache__/
 # secrets / local config
 .env
 
-# runtime data (GBs of uploads) — consider excluding from OneDrive backup too
+# runtime data (GBs of uploads) — keep it out of iCloud/Dropbox sync too
 data/
 
 # web

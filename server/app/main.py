@@ -3,7 +3,7 @@
 One uvicorn process serves the API and the built web frontend (web/dist) on
 0.0.0.0:8000 so LAN devices can reach it. The job worker is a single daemon
 thread started at lifespan; it's the only thing that touches the GPU models,
-so the VRAM rule holds by construction.
+so the memory rule holds by construction.
 """
 from __future__ import annotations
 
@@ -70,7 +70,7 @@ async def lifespan(app: FastAPI):
     print("=" * 62)
     yield
     # worker is a daemon; nothing to stop explicitly.
-    # Free any Ollama models still resident in VRAM — best-effort in a daemon
+    # Free any Ollama models still resident in memory — best-effort in a daemon
     # thread, so a slow or dead Ollama can neither hang shutdown nor raise.
     threading.Thread(
         target=_unload_ollama_best_effort,

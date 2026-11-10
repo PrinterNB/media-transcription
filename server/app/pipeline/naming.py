@@ -5,7 +5,7 @@ assign real names where a speaker is actually named in what's said. The model
 must emit strict JSON; we parse defensively (strip fences, repair trailing
 commas, one retry, else discard the chunk).
 
-VRAM choreography lives in the worker: it calls `manager.prepare_for_ollama()`
+Memory choreography lives in the worker: it calls `manager.prepare_for_ollama()`
 BEFORE building this pass, so Ollama (a 27B GGUF, ~13.7 GB) is never resident
 at the same time as ASR/diarization.
 
@@ -192,10 +192,10 @@ def llm_session():
 
 
 def unload_all(ollama_url: str | None = None) -> None:
-    """Ask Ollama to unload every model currently resident in VRAM.
+    """Ask Ollama to unload every model currently resident in memory.
 
     Called when a job starts (so a model left over from a previous run frees
-    VRAM before ASR loads) and after every Ollama-backed operation finishes,
+    memory before ASR loads) and after every Ollama-backed operation finishes,
     via `llm_session()`. Never raises — a missing/unreachable Ollama just
     means there's nothing loaded by us.
     """

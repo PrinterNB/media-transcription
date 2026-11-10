@@ -5,7 +5,11 @@ LM — `AutoModelForCausalLM` rejects its DiaConfig (see docs/spike-notes.md).
 So this backend loads it the documented way:
 
     from nemo.collections.speechlm2.models import SALM
-    model = SALM.from_pretrained(...).bfloat16().eval().to("cuda")
+    model = SALM.from_pretrained(...).float().eval().to(dev)  # dev = mps|cpu
+
+dtype is fp32, NOT the old .bfloat16(): the MPS backend's bf16 ops are
+unreliable (silently degraded/NaN on Apple's GPU), and CPU has no fast
+bf16 GEMM either — see load() for the full tradeoff.
 
 and transcribes by passing the wav PATH to `model.generate()` inside a chat
 prompt (`model.audio_locator_tag`), chunked into ~30 s windows so progress
@@ -31,10 +35,11 @@ import re
 
 from ..config import local_model_dir
 from .asr_base import ProgressCB, Segment
+from . import free_torch_cache, torch_device
 
 # 30s windows, no overlap (see module docstring). Long windows = fewer
 # generate() round trips and better context for the LLM; 30s keeps progress
-# granular on a 6 GB model.
+# granular on the ~10 GB fp32 model this branch loads.
 _WINDOW = 30.0
 
 # Sentence splitter: break after terminal punctuation (incl. newlines), keep
@@ -73,10 +78,14 @@ class CanaryTranscriber:
         # resolves both from a local directory. (The small Qwen tokenizer
         # files still resolve via the hub; public, cached after first use.)
         source = str(local_model_dir("canary-qwen-2.5b") or self.model_id)
+        # Device: shared helper (mps else cpu; the NVIDIA-GPU path is gone).
+        # dtype fp32, not the Windows branch's .bfloat16(): bf16 ops on the
+        # MPS backend are unreliable, and CPU has no fast bf16 GEMM — so
+        # fp32 is the honest choice on both. Cost: ~doubles resident bytes
+        # (~5 -> ~10 GB); fine because the never-concurrent rule (manager.py)
+        # keeps Ollama from overlapping this model anyway.
         try:
-            self._model = (
-                SALM.from_pretrained(source).bfloat16().eval().to("cuda")
-            )
+            self._model = SALM.from_pretrained(source).float().eval().to(torch_device())
         except Exception as e:  # noqa: BLE001
             raise RuntimeError(
                 f"Failed to load Canary ({self.model_id}) via NeMo SALM: {e}"
@@ -88,8 +97,7 @@ class CanaryTranscriber:
         del self._model
         self._model = None
         gc.collect()
-        import torch
-        torch.cuda.empty_cache()
+        free_torch_cache()
 
     # ---- inference ----
     def transcribe(self, wav_path: str, progress_cb: ProgressCB | None = None) -> list[Segment]:
@@ -136,8 +144,8 @@ class CanaryTranscriber:
 
     def _transcribe_chunk(self, wav_path: str, i: int, chunk: np.ndarray) -> str:
         """Write `chunk` to a temp .wav in the input's dir and run one SALM
-        generate() over it. Sequential, one window per call — safest with a
-        6 GB model resident (batch=1, no prompt stacking)."""
+        generate() over it. Sequential, one window per call — safest with the
+        ~10 GB fp32 model resident (batch=1, no prompt stacking)."""
         import soundfile as sf
         import torch
 

@@ -3,8 +3,8 @@ load, so the first production job doesn't wait on ~9 GB of downloads.
 
 Run with the venv Python (NOT `python` from PATH):
 
-    .venv\\Scripts\\python scripts\\preload_models.py
-    .venv\\Scripts\\python scripts\\preload_models.py --local-only
+    .venv/bin/python scripts/preload_models.py
+    .venv/bin/python scripts/preload_models.py --local-only
 
 --local-only: only use models that are already here (Hugging Face cache OR a
 manual install under MODELS_DIR, default ./models) — never touches the
@@ -13,7 +13,7 @@ network. For air-gapped verification.
 Each step is independent — a failure in one prints and the rest still run.
 Heavy imports happen inside each step on purpose, so the script works even
 when one of the deps is missing/broken. Models are loaded on CPU where the
-app would use CUDA (this pass is about filling the HF cache, not measuring
+app would use MPS (this pass is about filling the HF cache, not measuring
 speed) and discarded afterwards.
 """
 from __future__ import annotations
@@ -45,8 +45,8 @@ LOCAL_CANARY_DIR = LOCAL_MODELS_DIR / "canary-qwen-2.5b"
 LOCAL_ONLY = False
 
 # The files each hub snapshot must hold before we treat its cache as complete
-# (and thus safe to skip). If any are missing — e.g. after a WinError 1314
-# dropped a file out of the snapshot dir — we clean and re-run the load.
+# (and thus safe to skip). If any are missing — e.g. after an interrupted
+# download left a half-populated snapshot dir — we clean and re-run the load.
 CANARY_FILES = ("config.json", "model.safetensors")
 WHISPER_FILES = (
     "model.bin",
@@ -90,11 +90,13 @@ def _repo_dir(repo_id: str) -> Path:
 def _cleanup_repo(repo_id: str, keep_blobs: bool = True) -> None:
     """Drop a partially-downloaded cache repo (or just its snapshots/).
 
-    Windows quirk ([WinError 1314], a required privilege is not held by the
-    client): huggingface_hub fails to move a freshly downloaded blob into the
-    snapshot dir. Removing the snapshot dir lets the retry re-link the blobs
-    that survived (content-addressed, they stay put in blobs/); with
-    keep_blobs=False the whole repo folder is dropped for a clean re-download.
+    huggingface_hub lands each blob in blobs/ then hard-links it into
+    snapshots/; a download that dies mid-flight leaves a half-empty
+    snapshot dir. Wiping snapshots/ lets the retry re-link the blobs that
+    survived (content-addressed, they stay put in blobs/); keep_blobs=False
+    drops the whole repo for a clean re-download. (On macOS, a partial
+    download is the only failure fallout left to handle: the half-empty
+    snapshot dir above, which is what a retry must clean first.)
     """
     d = _repo_dir(repo_id)
     if not d.is_dir():
@@ -104,9 +106,8 @@ def _cleanup_repo(repo_id: str, keep_blobs: bool = True) -> None:
         return
     print(f"  (cleaning partial cache: {target})", flush=True)
     import shutil
-    # ignore_errors: a still-locked file (the very WinError 1314 we're
-    # retrying around) shouldn't abort the cleanup — we re-raise the original
-    # load error afterwards, not a cleanup hiccup.
+    # ignore_errors: a cleanup hiccup shouldn't abort the cleanup — we
+    # re-raise the original load error afterwards, not a cleanup error.
     shutil.rmtree(target, ignore_errors=True)
 
 
@@ -118,15 +119,18 @@ def _final_hint(repo_id: str) -> str:
 
 
 def _with_hub_retry(repo_id: str, attempts: int = 3):
-    """Wrap `fn()` to retry half-finished HF downloads.
+    """Wrap `fn()` to retry transient HF download failures.
 
     Usage: `_with_hub_retry(repo_id)(fn)`. huggingface_hub downloads each
-    file into a content-addressed blob and moves it into the snapshot dir at
-    the end; if that move fails (Windows [WinError 1314], "a required
-    privilege is not held by the client" — a file-lock/privilege glitch) a
-    partial snapshot is left behind. Drop the snapshot dir and retry; after
-    the last attempt drop the whole cache repo so the next manual run starts
-    clean.
+    file into a content-addressed blob and hard-links it into the snapshot
+    dir at the end; a download that dies mid-flight leaves a partial
+    snapshot behind — drop the snapshot dir and retry (after the last
+    attempt, drop the whole repo so the next run starts clean).
+
+    Only network-ish failures retry: the transient ones are interrupted
+    downloads, whose fallout is the partial snapshot cleaned between
+    attempts. A local OSError on macOS (disk/permissions) is not transient
+    — retrying the same path can't fix it — so it re-raises immediately.
     """
     import huggingface_hub
 
@@ -137,17 +141,14 @@ def _with_hub_retry(repo_id: str, attempts: int = 3):
                 return fn()
             except huggingface_hub.errors.OfflineModeIsEnabled:
                 # Deliberately offline (HF_HUB_OFFLINE) — retrying won't help;
-                # must precede the OSError branch (it's a ConnectionError).
+                # must precede the generic branch (it's a ConnectionError).
                 raise
-            except OSError as e:  # [WinError 1314] and other move/download errors
-                last_exc = e
-                msg = f"{type(e).__name__}: {e}"
             except Exception as e:  # noqa: BLE001 — hub/network errors
                 last_exc = e
                 msg = f"{type(e).__name__}: {e}"
                 if not any(
                     s in msg.lower()
-                    for s in ("1314", "connection", "timeout", "temporarily")
+                    for s in ("connection", "timeout", "temporarily")
                 ):
                     raise
             print(f"  download hiccup ({msg[:160]}) — attempt {i + 1}/{attempts}",
@@ -230,7 +231,7 @@ def step_whisper() -> None:
 
     print(f"  loading {WHISPER_MODEL} (~3.1 GB, downloads on first run)...", flush=True)
     # cpu + default compute is fine for a download-only pass; much cheaper
-    # than spinning up the CUDA context just to touch the weights.
+    # than loading onto the MPS GPU just to touch the weights.
     model = _with_hub_retry(WHISPER_MODEL)(
         lambda: WhisperModel(WHISPER_MODEL, device="cpu")
     )

@@ -9,15 +9,20 @@ dependencies = [
     "python-multipart",
     "httpx",
     "soundfile",
-    # Blackwell (RTX 50xx, sm_120) needs cu128 wheels. Pinned to the exact
-    # version that satisfies BOTH Blackwell AND pyannote 3.4.0:
-    #   - torchaudio 2.11 (the newest) removed `torchaudio.AudioMetaData`
-    #     (moved to the torchcodec backend, which has no Windows wheel), which
-    #     breaks `import pyannote.audio` at module load.
-    #   - pyannote 4.x requires torchcodec, also no Windows wheel.
-    #   - 2.8.0+cu128 + torchaudio 2.8.0 keeps `AudioMetaData` AND sm_120.
-    "torch==2.8.0+cu128",
-    "torchaudio==2.8.0+cu128",
+    # torch/torchaudio are pinned to the last version that keeps pyannote 3.4.0
+    # importable — the constraint is platform-neutral, not device-related:
+    #   - torchaudio 2.11 (the newest) moved `AudioMetaData` into the torchcodec
+    #     backend and dropped it from torchaudio, so `import pyannote.audio`
+    #     fails at module load.
+    #   - pyannote 4.x needs torchcodec outright.
+    #   - 2.8.0 keeps `AudioMetaData`; torch here uses `mps` and falls back to
+    #     `cpu`.
+    # The pins are unlabelled, not `+cpu`: the `+cpu`/`+cuNNN` wheels at
+    # download.pytorch.org are Linux/Windows builds only (uv rejects them for
+    # the `macosx_11_0_arm64` tag here), and PyPI ships the mac wheel as plain
+    # 2.8.0.
+    "torch==2.8.0",
+    "torchaudio==2.8.0",
     # Canary-qwen-2.5b is a Qwen2-era model; freeze transformers to 4.x to
     # avoid 5.x breaking changes to AutoModelForCausalLM / word_timestamps_mapper.
     "transformers>=4.41,<5",
@@ -30,8 +35,9 @@ dependencies = [
     # top-level package). `nemo` on PyPI is an unrelated NIST Django app that
     # installs a shadowing all-caps `NEMO` package and breaks `import nemo`.
     # The plain `speechlm2` extra drags in the TTS text-processing stack
-    # (nemo_text_processing -> pynini), which has no Windows wheel; the SALM
-    # import only needs the core + asr + speechlm2-only groups.
+    # (nemo_text_processing -> pynini, a C++ extension we never use and that
+    # has to be built from source); the SALM import only needs the core + asr
+    # + speechlm2-only groups.
     "nemo_toolkit[asr,speechlm2-only]==3.0.0",
     "pytest",
     "argon2-cffi>=25.1.0",
@@ -47,19 +53,6 @@ dependencies = [
 # our pinned torch 2.8.0. 0.13.0 is the newest that imports cleanly under it.
 [tool.uv]
 override-dependencies = ["torchao==0.13.0"]
-
-# cu128 wheels for torch / torchaudio live on the pytorch index, not PyPI.
-# `explicit` keeps uv from probing that index for every other package (it
-# mirrors a few PyPI dists like `packaging` at different versions, which
-# breaks resolution otherwise).
-[[tool.uv.index]]
-name = "pytorch"
-url = "https://download.pytorch.org/whl/cu128"
-explicit = true
-
-[tool.uv.sources]
-torch = { index = "pytorch" }
-torchaudio = { index = "pytorch" }
 
 [tool.pytest.ini_options]
 testpaths = ["server/tests"]

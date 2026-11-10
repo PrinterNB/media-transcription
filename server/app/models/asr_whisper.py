@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from ..config import local_model_dir
 from .asr_base import ProgressCB, Segment, Word
+from . import ctranslate_device, free_torch_cache
 
 
 class WhisperTranscriber:
@@ -32,7 +33,15 @@ class WhisperTranscriber:
         # loads that directory natively. Absent folder -> the hub path,
         # unchanged.
         source = str(local_model_dir("faster-whisper-large-v3") or self.model_id)
-        self._model = WhisperModel(source, device="cuda", compute_type="float16")
+        # ctranslate2 (WhisperModel's engine) has no MPS device — cpu and its
+        # deleted NVIDIA-GPU backend only — so Whisper stays on CPU even on
+        # the M1 branch; models/__init__.ctranslate_device() encodes that
+        # constraint. compute_type: float16 was the GPU fast path; int8 is
+        # the CPU one (halves resident bytes vs float32, and quantization is
+        # ctranslate2's own, well-trodden path).
+        self._model = WhisperModel(
+            source, device=ctranslate_device(), compute_type="int8"
+        )
 
     def unload(self) -> None:
         if self._model is None:
@@ -40,9 +49,10 @@ class WhisperTranscriber:
         del self._model
         self._model = None
         import gc
-        import torch
         gc.collect()
-        torch.cuda.empty_cache()
+        # Device-aware free (models/__init__); whisper's ctranslate2 weights
+        # are freed by gc alone, and the helper no-ops when torch is absent.
+        free_torch_cache()
 
     def transcribe(
         self,

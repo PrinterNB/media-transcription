@@ -1,0 +1,13 @@
+# This branch targets macOS only: every text file uses LF, and checkout must never
+# rewrite it, even if a contributor sets core.autocrlf or edits from a Windows box.
+* text=auto eol=lf
+
+# Shell launcher must keep its exec bit and never gain CR (a CR'd shebang fails).
+scripts/run.sh text eol=lf
+
+# Media / caches stay byte-for-byte.
+*.wav binary
+*.png binary
+*.jpg binary
+*.mp3 binary
+*.mp4 binary

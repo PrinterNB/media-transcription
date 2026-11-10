@@ -163,7 +163,7 @@ def summarize_job(job_id: str, body: dict | None = None, user: dict = Depends(re
     if not (job.get("segments") or []):
         raise HTTPException(400, "job has no transcript segments to summarize")
 
-    # Don't yank ASR out of VRAM from under a job that's mid-pipeline.
+    # Don't yank ASR out of resident memory from under a job that's mid-pipeline.
     if _other_job_live():
         raise HTTPException(409, "another job is still running — wait for it to finish, then run the summary")
 

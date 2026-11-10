@@ -28,7 +28,7 @@ class AudioError(Exception):
 def _require_ffmpeg() -> None:
     if shutil.which("ffmpeg") is None:
         raise AudioError(
-            "ffmpeg not found on PATH. Install it (e.g. `winget install Gyan.FFmpeg`) "
+            "ffmpeg not found on PATH. Install it (e.g. `brew install ffmpeg`) "
             "and make sure it's on PATH."
         )
 

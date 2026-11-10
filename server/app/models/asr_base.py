@@ -51,10 +51,10 @@ class Transcriber(Protocol):
     name: str
 
     def load(self) -> None:
-        """Load the model onto CUDA. Idempotent if already loaded."""
+        """Load the model on the resolved device (MPS else CPU; models/__init__.torch_device). Idempotent if already loaded."""
 
     def unload(self) -> None:
-        """Free the model (del + gc + torch.cuda.empty_cache)."""
+        """Free the model (del + gc + free_torch_cache, the device-aware allocator free)."""
 
     def transcribe(self, wav_path: str, progress_cb: ProgressCB | None = None) -> list[Segment]:
         """Transcribe the 16 kHz mono wav. Must be called after load()."""

@@ -13,6 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from ..config import local_model_dir
+from . import free_torch_cache, torch_device
 
 
 class DiarizationError(Exception):
@@ -119,7 +120,11 @@ class Diarizer:
         if self._pipe is None:  # from_pretrained gives up and returns None
             raise DiarizationError(gated_hint)
         # NB: no .eval() here — pyannote's Pipeline is not an nn.Module.
-        self._pipe.to(torch.device("cuda"))
+        # Unlike Whisper, pyannote is plain torch, so it DOES get the M1
+        # GPU: device comes from the shared helper (mps else cpu, never the
+        # deleted NVIDIA path). dtype stays the pipeline default fp32 —
+        # bf16 on the MPS backend is unreliable (models/__init__.torch_device).
+        self._pipe.to(torch_device())
         try:
             self._pipe = self._pipe.instantiate({"use_speaker_verification": True})
         except Exception:  # noqa: BLE001
@@ -131,9 +136,8 @@ class Diarizer:
             del self._pipe
             self._pipe = None
             import gc
-            import torch
             gc.collect()
-            torch.cuda.empty_cache()
+            free_torch_cache()
 
     def diarize(self, wav_path: str) -> list[DiarizationTrack]:
         if self._pipe is None:

@@ -2,7 +2,7 @@
 
 Runs entirely against Ollama (same endpoint/pattern as naming.py): no local
 models are involved, but the caller must have already called
-`manager.prepare_for_ollama()` so ASR/diarization are out of VRAM first.
+`manager.prepare_for_ollama()` so ASR/diarization are unloaded first.
 
 Transcripts longer than a safe prompt budget are handled map-reduce style:
 they are split at segment boundaries into ~40k-char sections, each section is

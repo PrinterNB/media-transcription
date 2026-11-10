@@ -1,12 +1,18 @@
 # Phase 0 — Spike notes (2026-09-25)
 
-Probes run on this box: RTX 5080 (Blackwell, cc 12.0), 15.9 GB VRAM, torch 2.8.0+cu128.
+**Historical:** recorded on the Windows/CUDA box. This branch is the macOS port
+— torch on `mps`, falling back to `cpu` — so every GPU/cu128 number below is
+what that box showed, not what this one does.
+
+Probes run on this box (Windows/CUDA — historical): RTX 5080 (Blackwell, cc 12.0),
+15.9 GB VRAM, torch 2.8.0+cu128. MPS — this branch's device — was never probed,
+and the CUDA numbers below belong to that box.
 
 ## What passed
 
 | Probe | Result |
 |---|---|
-| torch CUDA / Blackwell | PASS — `cc=(12,0)`, 15.9 GB, cu128 build |
+| torch CUDA / Blackwell | PASS — `cc=(12,0)`, 15.9 GB, cu128 build (historical: that box, not this one) |
 | faster-whisper large-v3 load | PASS — ~6 min cold (downloads 3.1 GB) |
 | faster-whisper transcribe | PASS — 26 s for 60 s wav, language autodetect works |
 | Ollama qwen-fast JSON | PASS — `{"ok": true}` round-trips cleanly |
@@ -53,7 +59,8 @@ text = model.tokenizer.ids_to_text(answer_ids[0].cpu())
 So the Canary backend (`server/app/models/asr_canary.py`) must use **NeMo**,
 matching the plan's "documented fallback" (transformers-direct was the
 optimistic primary; NeMo is the guaranteed path). `nemo==8.0.2` is installed in
-the venv (keeps torch 2.8.0+cu128).
+the venv (keeps torch 2.8.0+cu128 — historical: that box's pin; this branch pins
+plain `torch==2.8.0`, which satisfies the same pyannote constraint).
 
 ### Canary word timestamps — open (Phase 3 will resolve)
 The NeMo SALM `generate()` returns token ids; whether it exposes per-word
@@ -83,11 +90,17 @@ VRAM rule by construction.
 
 ## Locked version set (frozen in pyproject.toml)
 
-- `torch==2.8.0+cu128`, `torchaudio==2.8.0+cu128` (from pytorch cu128 index)
+- `torch==2.8.0+cu128`, `torchaudio==2.8.0+cu128` (from pytorch cu128 index) —
+  **historical set**: recorded on the Windows box. This branch pins plain
+  `torch==2.8.0` / `torchaudio==2.8.0` from PyPI: the `+cpu`/`+cuNNN` local
+  versions at download.pytorch.org ship Linux/Windows wheels only, so nothing
+  there installs on macOS arm64.
   - chosen because: torchaudio 2.11 dropped `torchaudio.AudioMetaData` (moved to
-    the torchcodec backend, no Windows wheel) which breaks `import pyannote.audio`;
-    pyannote 4.x needs torchcodec (also no Windows wheel). 2.8.0 keeps both
-    `AudioMetaData` **and** Blackwell sm_120.
+    the torchcodec backend — the "no Windows wheel" note was Windows-only, torch
+    does ship macOS wheels, but the dropped symbol breaks `import pyannote.audio`
+    on every platform); pyannote 4.x needs torchcodec. 2.8.0 keeps both
+    `AudioMetaData` **and** Blackwell sm_120 (the sm_120 half was the Windows
+    box's reason; the `AudioMetaData` half is why 2.8.0 still stands here).
 - `transformers>=4.41,<5` (4.57.6 resolved)
 - `pyannote.audio==3.4.0`
 - `faster-whisper` (1.2.1)

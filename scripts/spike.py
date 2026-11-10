@@ -3,16 +3,17 @@
 Proves, on this exact box, that every heavy dependency loads and produces sane
 output before we build on top of it:
 
-  1. torch reports CUDA with compute capability (12, 0)  -> Blackwell sm_120
+  1. torch has the MPS backend (Apple M1 GPU); an MPS-less torch wheel fails
+     this probe (the app would still run, on CPU)
   2. Canary (nvidia/canary-qwen-2.5b) loads, transcribes a 60s wav, word
      timestamps present? RTF sane?
-  3. faster-whisper large-v3 loads (ctranslate2 CUDA DLLs), non-English
-     auto-detect works
+  3. faster-whisper large-v3 loads (ctranslate2 CPU build — the engine has
+     no MPS device so Whisper stays on CPU), non-English auto-detect works
   4. pyannote diarization pipeline loads (HF_TOKEN gated)
   5. Ollama qwen-fast returns parseable JSON for the naming contract
 
-Run with CUDA 12.9 bin on PATH (see run.ps1 / README):
-    .venv\Scripts\python scripts\spike.py [--wav path/to/sample.wav]
+Run with the venv's Python (see scripts/run.sh / README):
+    .venv/bin/python scripts/spike.py [--wav path/to/sample.wav]
 
 Exit code 0 = every probe passed. Each probe prints PASS/FAIL so the notes
 file (docs/spike-notes.md) can lock decisions.
@@ -42,17 +43,15 @@ def probe_torch() -> None:
     except Exception as e:  # noqa: BLE001
         record("torch", False, f"import failed: {e}")
         return
-    if not torch.cuda.is_available():
-        record("torch.cuda", False, "CUDA not available")
+    if not hasattr(torch.backends, "mps") or not torch.backends.mps.is_available():
+        # The app would still boot — models/__init__ resolves to CPU — but
+        # this probe's job is proving the M1 GPU path the torch backends want.
+        record("torch.mps", False, "MPS unavailable — torch would fall back to CPU")
         return
-    dev = torch.cuda.get_device_capability(0)
-    name = torch.cuda.get_device_name(0)
-    ok = dev == (12, 0)
     record(
-        "torch.cuda",
-        ok,
-        f"{name} cc={dev} torch={torch.__version__} "
-        f"({torch.version.cuda}) mem={torch.cuda.get_device_properties(0).total_memory/2**30:.1f}GB",
+        "torch.mps",
+        True,
+        f"mps available; torch={torch.__version__} arch={os.uname().machine}",
     )
 
 
@@ -71,7 +70,7 @@ def _make_test_wav(path: str) -> None:
 
 def probe_canary(wav: str) -> None:
     try:
-        import torch  # noqa: F401 (checked implicitly via SALM on cuda)
+        import torch  # noqa: F401 (checked implicitly via SALM on mps/cpu)
     except Exception:  # noqa: BLE001
         record("canary", False, "torch not available")
         return
@@ -83,9 +82,12 @@ def probe_canary(wav: str) -> None:
         # AutoModelForCausalLM rejects its DiaConfig (see docs/spike-notes.md).
         from nemo.collections.speechlm2.models import SALM
 
+        # Same policy as the app backend: fp32 (bf16 ops are unreliable on
+        # the MPS backend), device mps when available else cpu.
+        dev = "mps" if torch.backends.mps.is_available() else "cpu"
         model = SALM.from_pretrained(
             "nvidia/canary-qwen-2.5b"
-        ).bfloat16().eval().to("cuda")
+        ).float().eval().to(dev)
     except Exception as e:  # noqa: BLE001
         record("canary.load", False, f"{type(e).__name__}: {e}")
         return
@@ -132,7 +134,8 @@ def probe_whisper(wav: str) -> None:
         return
     t0 = time.time()
     try:
-        model = WhisperModel("large-v3", device="cuda", compute_type="float16")
+        # ctranslate2 has no MPS device — mirrors asr_whisper.load: cpu + int8.
+        model = WhisperModel("large-v3", device="cpu", compute_type="int8")
     except Exception as e:  # noqa: BLE001
         record("whisper.load", False, f"{type(e).__name__}: {e}")
         return
@@ -170,7 +173,8 @@ def probe_pyannote(wav: str) -> None:
         pipe = Pipeline.from_pretrained(
             "pyannote/speaker-diarization-3.1", use_auth_token=os.environ["HF_TOKEN"]
         )
-        pipe.to(torch.device("cuda")).eval()
+        # device from the same rule the app uses (models/__init__.torch_device)
+        pipe.to(torch.device("mps" if torch.backends.mps.is_available() else "cpu")).eval()
     except Exception as e:  # noqa: BLE001
         record("pyannote.load", False, f"{type(e).__name__}: {e}")
         return

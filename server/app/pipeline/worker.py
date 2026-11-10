@@ -1,10 +1,10 @@
 """Single background worker: the job stage machine.
 
 One consumer thread processes jobs strictly one at a time, which (by
-construction) guarantees the VRAM rule: stages run sequentially, and the
+construction) guarantees the memory rule: stages run sequentially, and the
 naming stage calls `manager.prepare_for_ollama()` — unloading ASR + the
 diarizer — BEFORE it touches Ollama. Ollama and ASR/diarization therefore
-never coexist in VRAM.
+never coexist in memory.
 
 Stages (sequential):
     queued -> extracting -> transcribing -> diarizing -> naming -> writing
@@ -133,7 +133,7 @@ class JobWorker:
             return
 
         # Ollama keeps models warm between requests; unload any so they don't
-        # sit in VRAM next to the ASR model (and free room for this job).
+        # sit in memory next to the ASR model (and free room for this job).
         naming.unload_all()
 
         opts = job.get("options", {}) or {}
@@ -218,7 +218,7 @@ class JobWorker:
                 if not self._cancelled(job_id):
                     db.update(job_id, message=f"Summarizing ({pending})…")
                     # Idempotent: a no-op if the naming stage already freed
-                    # VRAM, required when naming was skipped for this job.
+                    # memory, required when naming was skipped for this job.
                     manager.prepare_for_ollama()
                     try:
                         with naming.llm_session():  # frees resident Ollama models after
